@@ -2,8 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   CloudMart Database Stack.
-  Creates an Amazon RDS MySQL database in the private
-  subnet of the CloudMart VPC.
+  Creates an Amazon RDS MySQL database in the
+  private subnet of the CloudMart VPC.
 
 
 # ==========================================================
@@ -15,11 +15,8 @@ Parameters:
   # Database name
   # --------------------------------------------------------
   DBName:
-
     Type: String
-
     Default: cloudmart
-
     Description: Name of the CloudMart database
 
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
@@ -29,11 +26,8 @@ Parameters:
   # RDS instance class
   # --------------------------------------------------------
   DBInstanceClass:
-
     Type: String
-
     Default: db.t3.micro
-
     Description: RDS MySQL instance class
 
 
@@ -41,13 +35,9 @@ Parameters:
   # Database storage
   # --------------------------------------------------------
   DBAllocatedStorage:
-
     Type: Number
-
     Default: 20
-
     Description: RDS allocated storage in GB
-
     MinValue: 20
 
 
@@ -55,11 +45,8 @@ Parameters:
   # MySQL port
   # --------------------------------------------------------
   DBPort:
-
     Type: Number
-
     Default: 3306
-
     Description: MySQL database port
 
 
@@ -185,7 +172,7 @@ Resources:
       # ----------------------------------------------------
       Engine: mysql
 
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.46'
 
       # ----------------------------------------------------
       # Database name
@@ -194,8 +181,6 @@ Resources:
 
       # ----------------------------------------------------
       # Database credentials
-      #
-      # Credentials are retrieved from Secrets Manager.
       # ----------------------------------------------------
       MasterUsername:
         Fn::Sub:
@@ -241,7 +226,7 @@ Resources:
       StorageEncrypted: true
 
       # ----------------------------------------------------
-      # Prevent accidental deletion
+      # Deletion protection
       # ----------------------------------------------------
       DeletionProtection: false
 
@@ -285,7 +270,7 @@ Outputs:
   # --------------------------------------------------------
   DatabaseEndpoint:
 
-    Description: CloudMart RDS endpoint
+    Description: CloudMart RDS database endpoint
 
     Value:
       Fn::GetAtt:
