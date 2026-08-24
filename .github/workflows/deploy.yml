@@ -397,3 +397,80 @@ jobs:
             --stack-name cloudmart-network \
             --query 'Stacks[0].Outputs' \
             --output table
+  # ==========================================================
+  # JOB 4: DEPLOY DATA STACK
+  # ==========================================================
+  deploy-data:
+
+    name: Deploy Data Stack
+
+    needs:
+      - deploy-network
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ------------------------------------------------------
+      # Checkout repository
+      # ------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ------------------------------------------------------
+      # Verify AWS authentication
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # Deploy Data Stack
+      #
+      # No parameter overrides are used currently.
+      # CloudFormation uses the Default values from data.yml.
+      # ------------------------------------------------------
+      - name: Deploy Data Stack
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "Deploying CloudMart Data Stack"
+          echo "=============================================="
+
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/data.yml \
+            --stack-name cloudmart-data
+
+          echo ""
+          echo "Data Stack deployment completed successfully."
+
+
+      # ------------------------------------------------------
+      # Display Data Stack outputs
+      # ------------------------------------------------------
+      - name: Display Data Stack outputs
+        run: |
+
+          echo "=============================================="
+          echo "Data Stack Outputs"
+          echo "=============================================="
+
+          aws cloudformation describe-stacks \
+            --stack-name cloudmart-data \
+            --query 'Stacks[0].Outputs' \
+            --output table
