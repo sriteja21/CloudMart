@@ -134,64 +134,135 @@ jobs:
           done
 
 
-  # ==================================================
-  # JOB 2: Upload CloudFormation templates to S3
-  # ==================================================
-  upload-cloudformation:
+ # ==================================================
+# JOB 2: Upload CloudFormation templates to S3
+# ==================================================
+upload-cloudformation:
 
-    name: Upload CloudFormation Templates to S3
+  name: Upload CloudFormation Templates to S3
 
-    needs:
-      - validate-cloudformation
+  needs:
+    - validate-cloudformation
 
-    runs-on: ubuntu-latest
+  runs-on: ubuntu-latest
 
-    steps:
+  steps:
 
-      # ----------------------------------------------
-      # Checkout repository
-      # ----------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------------
-      # Configure AWS credentials
-      # ----------------------------------------------
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+    # ----------------------------------------------
+    # Checkout repository
+    # ----------------------------------------------
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
 
-      # ----------------------------------------------
-      # Upload CloudFormation templates
-      # ----------------------------------------------
-      - name: Upload CloudFormation templates to S3
-        run: |
-
-          set -e
-
-          echo "Uploading CloudFormation templates..."
-
-          aws s3 sync \
-            infrastructure/ \
-            "s3://${CFN_BUCKET}/" \
-            --exclude "*" \
-            --include "*.yml" \
-            --include "*.yaml"
-
-          echo ""
-          echo "CloudFormation templates uploaded successfully."
-
-          echo ""
-          echo "Templates currently in S3:"
-          aws s3 ls \
-            "s3://${CFN_BUCKET}/" \
-            --recursive
+    # ----------------------------------------------
+    # Configure AWS credentials
+    # ----------------------------------------------
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v5
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
 
+    # ----------------------------------------------
+    # Verify AWS identity
+    # ----------------------------------------------
+    - name: Verify AWS identity
+      run: |
+        aws sts get-caller-identity
+
+
+    # ----------------------------------------------
+    # Create S3 bucket if it does not exist
+    # ----------------------------------------------
+    - name: Create CloudFormation S3 bucket if needed
+      shell: bash
+      run: |
+
+        set -e
+
+        BUCKET_NAME="${CFN_BUCKET}"
+
+        echo "Checking S3 bucket: ${BUCKET_NAME}"
+
+        if aws s3api head-bucket --bucket "${BUCKET_NAME}" 2>/dev/null; then
+
+          echo "S3 bucket already exists."
+          echo "Bucket: ${BUCKET_NAME}"
+
+        else
+
+          echo "S3 bucket does not exist."
+          echo "Creating bucket: ${BUCKET_NAME}"
+
+          if [ "${AWS_REGION}" = "us-east-1" ]; then
+
+            aws s3api create-bucket \
+              --bucket "${BUCKET_NAME}" \
+              --region "${AWS_REGION}"
+
+          else
+
+            aws s3api create-bucket \
+              --bucket "${BUCKET_NAME}" \
+              --region "${AWS_REGION}" \
+              --create-bucket-configuration \
+                LocationConstraint="${AWS_REGION}"
+
+          fi
+
+          echo "S3 bucket created successfully."
+
+        fi
+
+
+    # ----------------------------------------------
+    # Enable versioning
+    # ----------------------------------------------
+    - name: Enable S3 bucket versioning
+      run: |
+
+        aws s3api put-bucket-versioning \
+          --bucket "${CFN_BUCKET}" \
+          --versioning-configuration Status=Enabled
+
+        echo "S3 bucket versioning enabled."
+
+
+    # ----------------------------------------------
+    # Upload CloudFormation templates
+    # ----------------------------------------------
+    - name: Upload CloudFormation templates to S3
+      shell: bash
+      run: |
+
+        set -e
+
+        echo "Uploading CloudFormation templates..."
+
+        aws s3 sync \
+          infrastructure/ \
+          "s3://${CFN_BUCKET}/" \
+          --exclude "*" \
+          --include "*.yml" \
+          --include "*.yaml"
+
+        echo ""
+        echo "CloudFormation templates uploaded successfully."
+
+
+    # ----------------------------------------------
+    # Display templates in S3
+    # ----------------------------------------------
+    - name: List CloudFormation templates in S3
+      run: |
+
+        echo "Templates currently in S3:"
+
+        aws s3 ls \
+          "s3://${CFN_BUCKET}/" \
+          --recursive
   # ==================================================
   # JOB 3: Deploy Network Stack
   # ==================================================
