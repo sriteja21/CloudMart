@@ -1,5 +1,8 @@
 name: CloudMart Infrastructure Deployment
 
+# ============================================================
+# WORKFLOW TRIGGERS
+# ============================================================
 on:
   push:
     branches:
@@ -7,58 +10,67 @@ on:
 
   workflow_dispatch:
 
-# --------------------------------------------------
-# Global environment variables
-# --------------------------------------------------
+
+# ============================================================
+# GLOBAL ENVIRONMENT VARIABLES
+# ============================================================
 env:
   AWS_REGION: ap-south-1
   CFN_BUCKET: cloudmart-cfn-templates
 
-# --------------------------------------------------
-# GitHub OIDC permissions
-# --------------------------------------------------
+
+# ============================================================
+# GITHUB OIDC PERMISSIONS
+# ============================================================
 permissions:
   id-token: write
   contents: read
 
+
+# ============================================================
+# JOBS
+# ============================================================
 jobs:
 
-  # ==================================================
-  # JOB 1: Lint and Validate CloudFormation
-  # ==================================================
+  # ==========================================================
+  # JOB 1: LINT AND VALIDATE ALL CLOUDFORMATION TEMPLATES
+  # ==========================================================
   validate-cloudformation:
 
     name: Lint and Validate CloudFormation
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Checkout repository
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Install cfn-lint
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Install cfn-lint
         run: |
           python -m pip install --upgrade pip
           pip install cfn-lint
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Find and lint ALL CloudFormation templates
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Lint all CloudFormation templates
         shell: bash
         run: |
 
           set -e
 
+          echo "=============================================="
           echo "Searching for CloudFormation templates..."
+          echo "=============================================="
 
           mapfile -t templates < <(
             find infrastructure \
@@ -71,44 +83,67 @@ jobs:
             exit 1
           fi
 
+          echo ""
           echo "Templates found:"
           printf '%s\n' "${templates[@]}"
 
           echo ""
-          echo "Starting cfn-lint..."
-          echo ""
+          echo "=============================================="
+          echo "Starting cfn-lint"
+          echo "=============================================="
 
           for template in "${templates[@]}"
           do
-            echo "=============================================="
+            echo ""
+            echo "----------------------------------------------"
             echo "Linting: $template"
-            echo "=============================================="
+            echo "----------------------------------------------"
 
             cfn-lint "$template"
 
             echo "Lint successful: $template"
-            echo ""
           done
 
+          echo ""
+          echo "=============================================="
+          echo "All CloudFormation templates passed cfn-lint"
+          echo "=============================================="
 
-      # ----------------------------------------------
-      # Configure AWS credentials using OIDC
-      # ----------------------------------------------
+
+      # ------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
+      # Verify AWS authentication
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          echo "Checking AWS identity..."
+
+          aws sts get-caller-identity
+
+          echo "AWS authentication successful."
+
+
+      # ------------------------------------------------------
       # AWS CloudFormation validation
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Validate all CloudFormation templates
         shell: bash
         run: |
 
           set -e
+
+          echo "=============================================="
+          echo "Starting AWS CloudFormation validation"
+          echo "=============================================="
 
           mapfile -t templates < <(
             find infrastructure \
@@ -116,156 +151,177 @@ jobs:
               \( -name "*.yml" -o -name "*.yaml" \)
           )
 
-          echo ""
-          echo "Starting AWS CloudFormation validation..."
-          echo ""
-
           for template in "${templates[@]}"
           do
-            echo "=============================================="
+            echo ""
+            echo "----------------------------------------------"
             echo "AWS validating: $template"
-            echo "=============================================="
+            echo "----------------------------------------------"
 
             aws cloudformation validate-template \
               --template-body "file://$template"
 
             echo "AWS validation successful: $template"
-            echo ""
           done
 
-
- # ==================================================
-# JOB 2: Upload CloudFormation templates to S3
-# ==================================================
-upload-cloudformation:
-
-  name: Upload CloudFormation Templates to S3
-
-  needs:
-    - validate-cloudformation
-
-  runs-on: ubuntu-latest
-
-  steps:
-
-    # ----------------------------------------------
-    # Checkout repository
-    # ----------------------------------------------
-    - name: Checkout repository
-      uses: actions/checkout@v4
+          echo ""
+          echo "=============================================="
+          echo "All CloudFormation templates passed AWS validation"
+          echo "=============================================="
 
 
-    # ----------------------------------------------
-    # Configure AWS credentials
-    # ----------------------------------------------
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v5
-      with:
-        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-        aws-region: ${{ env.AWS_REGION }}
+  # ==========================================================
+  # JOB 2: CREATE S3 BUCKET AND UPLOAD CLOUDFORMATION TEMPLATES
+  # ==========================================================
+  upload-cloudformation:
+
+    name: Upload CloudFormation Templates to S3
+
+    needs:
+      - validate-cloudformation
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ------------------------------------------------------
+      # Checkout repository
+      # ------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
 
-    # ----------------------------------------------
-    # Verify AWS identity
-    # ----------------------------------------------
-    - name: Verify AWS identity
-      run: |
-        aws sts get-caller-identity
+      # ------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
 
-    # ----------------------------------------------
-    # Create S3 bucket if it does not exist
-    # ----------------------------------------------
-    - name: Create CloudFormation S3 bucket if needed
-      shell: bash
-      run: |
+      # ------------------------------------------------------
+      # Verify AWS authentication
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
 
-        set -e
 
-        BUCKET_NAME="${CFN_BUCKET}"
+      # ------------------------------------------------------
+      # Create S3 bucket if it does not exist
+      # ------------------------------------------------------
+      - name: Create CloudFormation S3 bucket if needed
+        shell: bash
+        run: |
 
-        echo "Checking S3 bucket: ${BUCKET_NAME}"
+          set -e
 
-        if aws s3api head-bucket --bucket "${BUCKET_NAME}" 2>/dev/null; then
+          BUCKET_NAME="${CFN_BUCKET}"
 
-          echo "S3 bucket already exists."
+          echo "=============================================="
+          echo "Checking S3 bucket"
           echo "Bucket: ${BUCKET_NAME}"
+          echo "Region: ${AWS_REGION}"
+          echo "=============================================="
 
-        else
+          if aws s3api head-bucket \
+            --bucket "${BUCKET_NAME}" \
+            2>/dev/null
+          then
 
-          echo "S3 bucket does not exist."
-          echo "Creating bucket: ${BUCKET_NAME}"
-
-          if [ "${AWS_REGION}" = "us-east-1" ]; then
-
-            aws s3api create-bucket \
-              --bucket "${BUCKET_NAME}" \
-              --region "${AWS_REGION}"
+            echo ""
+            echo "S3 bucket already exists."
+            echo "No bucket creation required."
 
           else
 
-            aws s3api create-bucket \
-              --bucket "${BUCKET_NAME}" \
-              --region "${AWS_REGION}" \
-              --create-bucket-configuration \
-                LocationConstraint="${AWS_REGION}"
+            echo ""
+            echo "S3 bucket does not exist."
+            echo "Creating bucket..."
+
+            if [ "${AWS_REGION}" = "us-east-1" ]; then
+
+              aws s3api create-bucket \
+                --bucket "${BUCKET_NAME}" \
+                --region "${AWS_REGION}"
+
+            else
+
+              aws s3api create-bucket \
+                --bucket "${BUCKET_NAME}" \
+                --region "${AWS_REGION}" \
+                --create-bucket-configuration \
+                  LocationConstraint="${AWS_REGION}"
+
+            fi
+
+            echo ""
+            echo "S3 bucket created successfully."
 
           fi
 
-          echo "S3 bucket created successfully."
 
-        fi
+      # ------------------------------------------------------
+      # Enable S3 versioning
+      # ------------------------------------------------------
+      - name: Enable S3 bucket versioning
+        run: |
 
+          set -e
 
-    # ----------------------------------------------
-    # Enable versioning
-    # ----------------------------------------------
-    - name: Enable S3 bucket versioning
-      run: |
+          echo "Enabling S3 bucket versioning..."
 
-        aws s3api put-bucket-versioning \
-          --bucket "${CFN_BUCKET}" \
-          --versioning-configuration Status=Enabled
+          aws s3api put-bucket-versioning \
+            --bucket "${CFN_BUCKET}" \
+            --versioning-configuration Status=Enabled
 
-        echo "S3 bucket versioning enabled."
-
-
-    # ----------------------------------------------
-    # Upload CloudFormation templates
-    # ----------------------------------------------
-    - name: Upload CloudFormation templates to S3
-      shell: bash
-      run: |
-
-        set -e
-
-        echo "Uploading CloudFormation templates..."
-
-        aws s3 sync \
-          infrastructure/ \
-          "s3://${CFN_BUCKET}/" \
-          --exclude "*" \
-          --include "*.yml" \
-          --include "*.yaml"
-
-        echo ""
-        echo "CloudFormation templates uploaded successfully."
+          echo "S3 bucket versioning enabled."
 
 
-    # ----------------------------------------------
-    # Display templates in S3
-    # ----------------------------------------------
-    - name: List CloudFormation templates in S3
-      run: |
+      # ------------------------------------------------------
+      # Upload all CloudFormation templates
+      # ------------------------------------------------------
+      - name: Upload CloudFormation templates to S3
+        shell: bash
+        run: |
 
-        echo "Templates currently in S3:"
+          set -e
 
-        aws s3 ls \
-          "s3://${CFN_BUCKET}/" \
-          --recursive
-  # ==================================================
-  # JOB 3: Deploy Network Stack
-  # ==================================================
+          echo "=============================================="
+          echo "Uploading CloudFormation templates to S3"
+          echo "=============================================="
+
+          aws s3 sync \
+            infrastructure/ \
+            "s3://${CFN_BUCKET}/" \
+            --exclude "*" \
+            --include "*.yml" \
+            --include "*.yaml"
+
+          echo ""
+          echo "CloudFormation templates uploaded successfully."
+
+
+      # ------------------------------------------------------
+      # Display uploaded templates
+      # ------------------------------------------------------
+      - name: List CloudFormation templates in S3
+        run: |
+
+          echo "=============================================="
+          echo "CloudFormation templates currently in S3"
+          echo "=============================================="
+
+          aws s3 ls \
+            "s3://${CFN_BUCKET}/" \
+            --recursive
+
+
+  # ==========================================================
+  # JOB 3: DEPLOY NETWORK STACK
+  # ==========================================================
   deploy-network:
 
     name: Deploy Network Stack
@@ -277,32 +333,43 @@ upload-cloudformation:
 
     steps:
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Checkout repository
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Configure AWS credentials
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
 
-      # ----------------------------------------------
-      # Deploy Network CloudFormation stack
-      # ----------------------------------------------
+      # ------------------------------------------------------
+      # Verify AWS identity
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # Deploy Network Stack
+      # ------------------------------------------------------
       - name: Deploy Network Stack
+        shell: bash
         run: |
 
           set -e
 
-          echo "Deploying CloudMart Network Stack..."
+          echo "=============================================="
+          echo "Deploying CloudMart Network Stack"
+          echo "=============================================="
 
           aws cloudformation deploy \
             --template-file infrastructure/network-stack.yml \
@@ -314,16 +381,18 @@ upload-cloudformation:
               AdminIp="${{ vars.ADMIN_IP }}"
 
           echo ""
-          echo "Network Stack deployment completed."
+          echo "Network Stack deployment completed successfully."
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Display Network Stack outputs
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Display Network Stack outputs
         run: |
 
-          echo "Network Stack Outputs:"
+          echo "=============================================="
+          echo "Network Stack Outputs"
+          echo "=============================================="
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-network \
@@ -331,9 +400,9 @@ upload-cloudformation:
             --output table
 
 
-  # ==================================================
-  # JOB 4: Deploy Data Stack
-  # ==================================================
+  # ==========================================================
+  # JOB 4: DEPLOY DATA STACK
+  # ==========================================================
   deploy-data:
 
     name: Deploy Data Stack
@@ -345,48 +414,61 @@ upload-cloudformation:
 
     steps:
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Checkout repository
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Configure AWS credentials
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
 
-      # ----------------------------------------------
-      # Deploy Data CloudFormation stack
-      # ----------------------------------------------
+      # ------------------------------------------------------
+      # Verify AWS identity
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # Deploy Data Stack
+      # ------------------------------------------------------
       - name: Deploy Data Stack
+        shell: bash
         run: |
 
           set -e
 
-          echo "Deploying CloudMart Data Stack..."
+          echo "=============================================="
+          echo "Deploying CloudMart Data Stack"
+          echo "=============================================="
 
           aws cloudformation deploy \
             --template-file infrastructure/data-stack.yml \
             --stack-name cloudmart-data
 
           echo ""
-          echo "Data Stack deployment completed."
+          echo "Data Stack deployment completed successfully."
 
 
-      # ----------------------------------------------
+      # ------------------------------------------------------
       # Display Data Stack outputs
-      # ----------------------------------------------
+      # ------------------------------------------------------
       - name: Display Data Stack outputs
         run: |
 
-          echo "Data Stack Outputs:"
+          echo "=============================================="
+          echo "Data Stack Outputs"
+          echo "=============================================="
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-data \
