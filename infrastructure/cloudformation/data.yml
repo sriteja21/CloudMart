@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   CloudMart Database Stack.
-  Creates Amazon RDS MySQL in the private subnet
+  Creates Amazon RDS MySQL in the private subnets
   created by the CloudMart Network Stack.
 
 
@@ -17,8 +17,11 @@ Parameters:
   # --------------------------------------------------------
 
   DBName:
+
     Type: String
+
     Default: cloudmart
+
     Description: Name of the CloudMart database
 
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
@@ -29,8 +32,11 @@ Parameters:
   # --------------------------------------------------------
 
   DBInstanceClass:
+
     Type: String
+
     Default: db.t3.micro
+
     Description: RDS MySQL instance class
 
 
@@ -39,8 +45,11 @@ Parameters:
   # --------------------------------------------------------
 
   DBAllocatedStorage:
+
     Type: Number
+
     Default: 20
+
     Description: RDS allocated storage in GB
 
     MinValue: 20
@@ -62,8 +71,6 @@ Resources:
     Type: AWS::SecretsManager::Secret
 
     Properties:
-
-      Name: /cloudmart/dev/database
 
       Description: CloudMart RDS MySQL database credentials
 
@@ -91,6 +98,8 @@ Resources:
 
   # ========================================================
   # RDS SUBNET GROUP
+  #
+  # Uses TWO private subnets in different AZs.
   # ========================================================
 
   CloudMartDBSubnetGroup:
@@ -105,6 +114,8 @@ Resources:
       SubnetIds:
 
         - Fn::ImportValue: CloudMart-Private-Subnet-ID
+
+        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
 
       Tags:
 
@@ -121,7 +132,7 @@ Resources:
   # ========================================================
   # RDS MYSQL DATABASE
   #
-  # RDS SECURITY GROUP IS ALREADY CREATED BY NETWORK STACK.
+  # RDS SECURITY GROUP IS CREATED BY NETWORK STACK.
   # ========================================================
 
   CloudMartDatabase:
@@ -155,13 +166,20 @@ Resources:
       # ----------------------------------------------------
 
       MasterUsername:
+
         Fn::Sub:
+
           - '{{resolve:secretsmanager:${SecretArn}:SecretString:username}}'
+
           - SecretArn: !Ref CloudMartDatabaseSecret
 
+
       MasterUserPassword:
+
         Fn::Sub:
+
           - '{{resolve:secretsmanager:${SecretArn}:SecretString:password}}'
+
           - SecretArn: !Ref CloudMartDatabaseSecret
 
 
@@ -181,11 +199,14 @@ Resources:
       # ----------------------------------------------------
 
       DBSubnetGroupName:
+
         Ref: CloudMartDBSubnetGroup
+
 
       VPCSecurityGroups:
 
         - Fn::ImportValue: CloudMart-RDS-SG-ID
+
 
       PubliclyAccessible: false
 
@@ -237,7 +258,7 @@ Outputs:
 
 
   # --------------------------------------------------------
-  # RDS Database Identifier
+  # RDS DATABASE IDENTIFIER
   # --------------------------------------------------------
 
   DatabaseIdentifier:
@@ -252,7 +273,7 @@ Outputs:
 
 
   # --------------------------------------------------------
-  # RDS Endpoint
+  # RDS ENDPOINT
   # --------------------------------------------------------
 
   DatabaseEndpoint:
@@ -269,7 +290,7 @@ Outputs:
 
 
   # --------------------------------------------------------
-  # RDS Port
+  # RDS PORT
   # --------------------------------------------------------
 
   DatabasePort:
@@ -286,7 +307,7 @@ Outputs:
 
 
   # --------------------------------------------------------
-  # Database Name
+  # DATABASE NAME
   # --------------------------------------------------------
 
   DatabaseName:
@@ -300,7 +321,7 @@ Outputs:
 
 
   # --------------------------------------------------------
-  # Database Secret ARN
+  # DATABASE SECRET ARN
   # --------------------------------------------------------
 
   DatabaseSecretArn:
