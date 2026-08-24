@@ -1,27 +1,323 @@
-name: AWS Connection Test
+name: CloudMart Infrastructure Deployment
 
 on:
   push:
     branches:
       - main
 
+  workflow_dispatch:
+
+# --------------------------------------------------
+# Global environment variables
+# --------------------------------------------------
+env:
+  AWS_REGION: ap-south-1
+  CFN_BUCKET: cloudmart-cfn-templates
+
+# --------------------------------------------------
+# GitHub OIDC permissions
+# --------------------------------------------------
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  aws-connection:
+
+  # ==================================================
+  # JOB 1: Lint and Validate CloudFormation
+  # ==================================================
+  validate-cloudformation:
+
+    name: Lint and Validate CloudFormation
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+
+      # ----------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+
+      # ----------------------------------------------
+      # Install cfn-lint
+      # ----------------------------------------------
+      - name: Install cfn-lint
+        run: |
+          python -m pip install --upgrade pip
+          pip install cfn-lint
+
+
+      # ----------------------------------------------
+      # Find and lint ALL CloudFormation templates
+      # ----------------------------------------------
+      - name: Lint all CloudFormation templates
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "Searching for CloudFormation templates..."
+
+          mapfile -t templates < <(
+            find infrastructure \
+              -type f \
+              \( -name "*.yml" -o -name "*.yaml" \)
+          )
+
+          if [ ${#templates[@]} -eq 0 ]; then
+            echo "ERROR: No CloudFormation templates found."
+            exit 1
+          fi
+
+          echo "Templates found:"
+          printf '%s\n' "${templates[@]}"
+
+          echo ""
+          echo "Starting cfn-lint..."
+          echo ""
+
+          for template in "${templates[@]}"
+          do
+            echo "=============================================="
+            echo "Linting: $template"
+            echo "=============================================="
+
+            cfn-lint "$template"
+
+            echo "Lint successful: $template"
+            echo ""
+          done
+
+
+      # ----------------------------------------------
+      # Configure AWS credentials using OIDC
+      # ----------------------------------------------
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify AWS Connection
-        run: aws sts get-caller-identity
+
+      # ----------------------------------------------
+      # AWS CloudFormation validation
+      # ----------------------------------------------
+      - name: Validate all CloudFormation templates
+        shell: bash
+        run: |
+
+          set -e
+
+          mapfile -t templates < <(
+            find infrastructure \
+              -type f \
+              \( -name "*.yml" -o -name "*.yaml" \)
+          )
+
+          echo ""
+          echo "Starting AWS CloudFormation validation..."
+          echo ""
+
+          for template in "${templates[@]}"
+          do
+            echo "=============================================="
+            echo "AWS validating: $template"
+            echo "=============================================="
+
+            aws cloudformation validate-template \
+              --template-body "file://$template"
+
+            echo "AWS validation successful: $template"
+            echo ""
+          done
+
+
+  # ==================================================
+  # JOB 2: Upload CloudFormation templates to S3
+  # ==================================================
+  upload-cloudformation:
+
+    name: Upload CloudFormation Templates to S3
+
+    needs:
+      - validate-cloudformation
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------
+      # Configure AWS credentials
+      # ----------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ----------------------------------------------
+      # Upload CloudFormation templates
+      # ----------------------------------------------
+      - name: Upload CloudFormation templates to S3
+        run: |
+
+          set -e
+
+          echo "Uploading CloudFormation templates..."
+
+          aws s3 sync \
+            infrastructure/ \
+            "s3://${CFN_BUCKET}/" \
+            --exclude "*" \
+            --include "*.yml" \
+            --include "*.yaml"
+
+          echo ""
+          echo "CloudFormation templates uploaded successfully."
+
+          echo ""
+          echo "Templates currently in S3:"
+          aws s3 ls \
+            "s3://${CFN_BUCKET}/" \
+            --recursive
+
+
+  # ==================================================
+  # JOB 3: Deploy Network Stack
+  # ==================================================
+  deploy-network:
+
+    name: Deploy Network Stack
+
+    needs:
+      - upload-cloudformation
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------
+      # Configure AWS credentials
+      # ----------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ----------------------------------------------
+      # Deploy Network CloudFormation stack
+      # ----------------------------------------------
+      - name: Deploy Network Stack
+        run: |
+
+          set -e
+
+          echo "Deploying CloudMart Network Stack..."
+
+          aws cloudformation deploy \
+            --template-file infrastructure/network-stack.yml \
+            --stack-name cloudmart-network \
+            --parameter-overrides \
+              VpcCidr="${{ vars.VPC_CIDR }}" \
+              PublicSubnetCidr="${{ vars.PUBLIC_SUBNET_CIDR }}" \
+              PrivateSubnetCidr="${{ vars.PRIVATE_SUBNET_CIDR }}" \
+              AdminIp="${{ vars.ADMIN_IP }}"
+
+          echo ""
+          echo "Network Stack deployment completed."
+
+
+      # ----------------------------------------------
+      # Display Network Stack outputs
+      # ----------------------------------------------
+      - name: Display Network Stack outputs
+        run: |
+
+          echo "Network Stack Outputs:"
+
+          aws cloudformation describe-stacks \
+            --stack-name cloudmart-network \
+            --query 'Stacks[0].Outputs' \
+            --output table
+
+
+  # ==================================================
+  # JOB 4: Deploy Data Stack
+  # ==================================================
+  deploy-data:
+
+    name: Deploy Data Stack
+
+    needs:
+      - deploy-network
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------
+      # Configure AWS credentials
+      # ----------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ----------------------------------------------
+      # Deploy Data CloudFormation stack
+      # ----------------------------------------------
+      - name: Deploy Data Stack
+        run: |
+
+          set -e
+
+          echo "Deploying CloudMart Data Stack..."
+
+          aws cloudformation deploy \
+            --template-file infrastructure/data-stack.yml \
+            --stack-name cloudmart-data
+
+          echo ""
+          echo "Data Stack deployment completed."
+
+
+      # ----------------------------------------------
+      # Display Data Stack outputs
+      # ----------------------------------------------
+      - name: Display Data Stack outputs
+        run: |
+
+          echo "Data Stack Outputs:"
+
+          aws cloudformation describe-stacks \
+            --stack-name cloudmart-data \
+            --query 'Stacks[0].Outputs' \
+            --output table
