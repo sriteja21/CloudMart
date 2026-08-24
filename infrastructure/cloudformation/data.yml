@@ -46,16 +46,6 @@ Parameters:
     MinValue: 20
 
 
-  # --------------------------------------------------------
-  # MySQL port
-  # --------------------------------------------------------
-
-  DBPort:
-    Type: Number
-    Default: 3306
-    Description: MySQL database port
-
-
 # ==========================================================
 # RESOURCES
 # ==========================================================
@@ -322,18 +312,3 @@ Outputs:
 
     Export:
       Name: CloudMart-DatabaseSecretArn
-
-
-  # --------------------------------------------------------
-  # RDS Security Group
-  # --------------------------------------------------------
-
-  DatabaseSecurityGroup:
-
-    Description: CloudMart RDS security group
-
-    Value:
-      Fn::ImportValue: CloudMart-RDS-SG-ID
-
-    Export:
-      Name: CloudMart-DatabaseSecurityGroup
