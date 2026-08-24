@@ -73,7 +73,7 @@ jobs:
           echo "=============================================="
 
           mapfile -t templates < <(
-            find infrastructure \
+            find infrastructure/cloudformation \
               -type f \
               \( -name "*.yml" -o -name "*.yaml" \)
           )
@@ -146,7 +146,7 @@ jobs:
           echo "=============================================="
 
           mapfile -t templates < <(
-            find infrastructure \
+            find infrastructure/cloudformation \
               -type f \
               \( -name "*.yml" -o -name "*.yaml" \)
           )
@@ -171,7 +171,7 @@ jobs:
 
 
   # ==========================================================
-  # JOB 2: CREATE S3 BUCKET AND UPLOAD CLOUDFORMATION TEMPLATES
+  # JOB 2: CREATE S3 BUCKET AND UPLOAD CLOUDFORMATION
   # ==========================================================
   upload-cloudformation:
 
@@ -192,7 +192,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
+      # Configure AWS credentials
       # ------------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -281,7 +281,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # Upload all CloudFormation templates
+      # Upload ALL CloudFormation templates
       # ------------------------------------------------------
       - name: Upload CloudFormation templates to S3
         shell: bash
@@ -294,8 +294,8 @@ jobs:
           echo "=============================================="
 
           aws s3 sync \
-            infrastructure/ \
-            "s3://${CFN_BUCKET}/" \
+            infrastructure/cloudformation/ \
+            "s3://${CFN_BUCKET}/cloudformation/" \
             --exclude "*" \
             --include "*.yml" \
             --include "*.yaml"
@@ -315,7 +315,7 @@ jobs:
           echo "=============================================="
 
           aws s3 ls \
-            "s3://${CFN_BUCKET}/" \
+            "s3://${CFN_BUCKET}/cloudformation/" \
             --recursive
 
 
@@ -351,7 +351,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # Verify AWS identity
+      # Verify AWS authentication
       # ------------------------------------------------------
       - name: Verify AWS identity
         run: |
@@ -360,6 +360,10 @@ jobs:
 
       # ------------------------------------------------------
       # Deploy Network Stack
+      #
+      # No --parameter-overrides are required because
+      # CloudFormation will use the Default values defined
+      # inside network.yml.
       # ------------------------------------------------------
       - name: Deploy Network Stack
         shell: bash
@@ -372,13 +376,8 @@ jobs:
           echo "=============================================="
 
           aws cloudformation deploy \
-            --template-file infrastructure/network-stack.yml \
-            --stack-name cloudmart-network \
-            --parameter-overrides \
-              VpcCidr="${{ vars.VPC_CIDR }}" \
-              PublicSubnetCidr="${{ vars.PUBLIC_SUBNET_CIDR }}" \
-              PrivateSubnetCidr="${{ vars.PRIVATE_SUBNET_CIDR }}" \
-              AdminIp="${{ vars.ADMIN_IP }}"
+            --template-file infrastructure/cloudformation/network.yml \
+            --stack-name cloudmart-network
 
           echo ""
           echo "Network Stack deployment completed successfully."
@@ -396,81 +395,5 @@ jobs:
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-network \
-            --query 'Stacks[0].Outputs' \
-            --output table
-
-
-  # ==========================================================
-  # JOB 4: DEPLOY DATA STACK
-  # ==========================================================
-  deploy-data:
-
-    name: Deploy Data Stack
-
-    needs:
-      - deploy-network
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      # ------------------------------------------------------
-      # Checkout repository
-      # ------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-
-      # ------------------------------------------------------
-      # Configure AWS credentials
-      # ------------------------------------------------------
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-
-      # ------------------------------------------------------
-      # Verify AWS identity
-      # ------------------------------------------------------
-      - name: Verify AWS identity
-        run: |
-          aws sts get-caller-identity
-
-
-      # ------------------------------------------------------
-      # Deploy Data Stack
-      # ------------------------------------------------------
-      - name: Deploy Data Stack
-        shell: bash
-        run: |
-
-          set -e
-
-          echo "=============================================="
-          echo "Deploying CloudMart Data Stack"
-          echo "=============================================="
-
-          aws cloudformation deploy \
-            --template-file infrastructure/data-stack.yml \
-            --stack-name cloudmart-data
-
-          echo ""
-          echo "Data Stack deployment completed successfully."
-
-
-      # ------------------------------------------------------
-      # Display Data Stack outputs
-      # ------------------------------------------------------
-      - name: Display Data Stack outputs
-        run: |
-
-          echo "=============================================="
-          echo "Data Stack Outputs"
-          echo "=============================================="
-
-          aws cloudformation describe-stacks \
-            --stack-name cloudmart-data \
             --query 'Stacks[0].Outputs' \
             --output table
