@@ -35,7 +35,7 @@ Parameters:
   # --------------------------------------------------------
   # DATABASE STORAGE
   #
-  # 20 GB keeps the development database small.
+  # 20 GB development configuration
   # --------------------------------------------------------
 
   DBAllocatedStorage:
@@ -87,6 +87,41 @@ Resources:
 
 
   # ========================================================
+  # RDS DB SUBNET GROUP
+  #
+  # Created and managed by CloudFormation.
+  #
+  # Uses the two private subnets created by network.yml.
+  # The two subnets are in different Availability Zones.
+  # ========================================================
+
+  CloudMartDBSubnetGroup:
+
+    Type: AWS::RDS::DBSubnetGroup
+
+    Properties:
+
+      DBSubnetGroupDescription: "CloudMart RDS private subnet group"
+
+      SubnetIds:
+
+        - Fn::ImportValue: CloudMart-Private-Subnet-ID
+
+        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+
+      Tags:
+
+        - Key: Name
+          Value: CloudMart-RDS-SubnetGroup
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: dev
+
+
+  # ========================================================
   # RDS MYSQL DATABASE
   # ========================================================
 
@@ -95,8 +130,8 @@ Resources:
     Type: AWS::RDS::DBInstance
 
     # ------------------------------------------------------
-    # If CloudFormation deletes this resource, keep a
-    # final snapshot.
+    # CloudFormation keeps a final snapshot if the
+    # database resource is deleted.
     # ------------------------------------------------------
 
     DeletionPolicy: Snapshot
@@ -156,21 +191,18 @@ Resources:
 
 
       # ====================================================
-      # EXISTING DB SUBNET GROUP
-      #
-      # This subnet group was created manually.
-      #
-      # Name:
-      # cloudmart-rds-subnetgroup
+      # CLOUDFORMATION-MANAGED DB SUBNET GROUP
       # ====================================================
 
-      DBSubnetGroupName: cloudmart-rds-subnetgroup
+      DBSubnetGroupName:
+
+        Ref: CloudMartDBSubnetGroup
 
 
       # ====================================================
-      # EXISTING RDS SECURITY GROUP
+      # RDS SECURITY GROUP
       #
-      # Created by network.yml
+      # Imported from network.yml
       # ====================================================
 
       VPCSecurityGroups:
@@ -188,11 +220,8 @@ Resources:
       # ====================================================
       # BACKUP CONFIGURATION
       #
-      # FREE-TIER DEVELOPMENT ASSUMPTION
-      #
-      # Automated backup retention is disabled because
-      # the current AWS account has a Free Tier limitation
-      # on the allowed backup retention period.
+      # Free Tier / Development assumption:
+      # automated backups disabled.
       # ====================================================
 
       BackupRetentionPeriod: 0
@@ -210,8 +239,7 @@ Resources:
       # ====================================================
       # DELETION PROTECTION
       #
-      # Disabled for development so the stack can be
-      # deleted/recreated easily.
+      # Disabled for development.
       # ====================================================
 
       DeletionProtection: false
@@ -266,6 +294,7 @@ Outputs:
     Description: CloudMart RDS endpoint
 
     Value:
+
       Fn::GetAtt:
         - CloudMartDatabase
         - Endpoint.Address
@@ -283,6 +312,7 @@ Outputs:
     Description: CloudMart RDS MySQL port
 
     Value:
+
       Fn::GetAtt:
         - CloudMartDatabase
         - Endpoint.Port
@@ -317,3 +347,18 @@ Outputs:
 
     Export:
       Name: CloudMart-DatabaseSecretArn
+
+
+  # --------------------------------------------------------
+  # DATABASE SUBNET GROUP
+  # --------------------------------------------------------
+
+  DatabaseSubnetGroup:
+
+    Description: CloudMart RDS DB subnet group
+
+    Value:
+      Ref: CloudMartDBSubnetGroup
+
+    Export:
+      Name: CloudMart-DatabaseSubnetGroup
