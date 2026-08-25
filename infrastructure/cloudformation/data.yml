@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Database Stack
+Description: CloudMart Database Stack - Free Tier Development Configuration
 
 
 # ==========================================================
@@ -10,7 +10,7 @@ Description: CloudMart Database Stack
 Parameters:
 
   # --------------------------------------------------------
-  # Database name
+  # DATABASE NAME
   # --------------------------------------------------------
 
   DBName:
@@ -21,23 +21,27 @@ Parameters:
 
 
   # --------------------------------------------------------
-  # RDS instance class
+  # RDS INSTANCE CLASS
+  #
+  # Free Tier / Development assumption
   # --------------------------------------------------------
 
   DBInstanceClass:
     Type: String
     Default: db.t3.micro
-    Description: RDS MySQL instance class
+    Description: RDS MySQL instance class for development
 
 
   # --------------------------------------------------------
-  # Database storage
+  # DATABASE STORAGE
+  #
+  # 20 GB keeps the development database small.
   # --------------------------------------------------------
 
   DBAllocatedStorage:
     Type: Number
     Default: 20
-    Description: RDS allocated storage in GB
+    Description: RDS allocated storage in GB for development
     MinValue: 20
 
 
@@ -46,6 +50,7 @@ Parameters:
 # ==========================================================
 
 Resources:
+
 
   # ========================================================
   # DATABASE SECRET
@@ -89,31 +94,37 @@ Resources:
 
     Type: AWS::RDS::DBInstance
 
+    # ------------------------------------------------------
+    # If CloudFormation deletes this resource, keep a
+    # final snapshot.
+    # ------------------------------------------------------
+
     DeletionPolicy: Snapshot
 
     UpdateReplacePolicy: Snapshot
 
     Properties:
 
-      # ----------------------------------------------------
-      # Database engine
-      # ----------------------------------------------------
+
+      # ====================================================
+      # DATABASE ENGINE
+      # ====================================================
 
       Engine: mysql
 
       EngineVersion: '8.0.46'
 
 
-      # ----------------------------------------------------
-      # Database name
-      # ----------------------------------------------------
+      # ====================================================
+      # DATABASE NAME
+      # ====================================================
 
       DBName: !Ref DBName
 
 
-      # ----------------------------------------------------
-      # Database credentials
-      # ----------------------------------------------------
+      # ====================================================
+      # DATABASE CREDENTIALS
+      # ====================================================
 
       MasterUsername:
 
@@ -133,9 +144,9 @@ Resources:
           - SecretArn: !Ref CloudMartDatabaseSecret
 
 
-      # ----------------------------------------------------
-      # Instance configuration
-      # ----------------------------------------------------
+      # ====================================================
+      # INSTANCE CONFIGURATION
+      # ====================================================
 
       DBInstanceClass: !Ref DBInstanceClass
 
@@ -144,55 +155,71 @@ Resources:
       StorageType: gp3
 
 
-      # ----------------------------------------------------
-      # EXISTING RDS SUBNET GROUP
-      # ----------------------------------------------------
+      # ====================================================
+      # EXISTING DB SUBNET GROUP
+      #
+      # This subnet group was created manually.
+      #
+      # Name:
+      # cloudmart-rds-subnetgroup
+      # ====================================================
 
       DBSubnetGroupName: cloudmart-rds-subnetgroup
 
 
-      # ----------------------------------------------------
+      # ====================================================
       # EXISTING RDS SECURITY GROUP
-      # ----------------------------------------------------
+      #
+      # Created by network.yml
+      # ====================================================
 
       VPCSecurityGroups:
 
         - Fn::ImportValue: CloudMart-RDS-SG-ID
 
 
-      # ----------------------------------------------------
-      # RDS NETWORK ACCESS
-      # ----------------------------------------------------
+      # ====================================================
+      # PRIVATE DATABASE
+      # ====================================================
 
       PubliclyAccessible: false
 
 
-      # ----------------------------------------------------
-      # BACKUP
-      # ----------------------------------------------------
+      # ====================================================
+      # BACKUP CONFIGURATION
+      #
+      # FREE-TIER DEVELOPMENT ASSUMPTION
+      #
+      # Automated backup retention is disabled because
+      # the current AWS account has a Free Tier limitation
+      # on the allowed backup retention period.
+      # ====================================================
 
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 0
 
       CopyTagsToSnapshot: true
 
 
-      # ----------------------------------------------------
-      # ENCRYPTION
-      # ----------------------------------------------------
+      # ====================================================
+      # STORAGE ENCRYPTION
+      # ====================================================
 
       StorageEncrypted: true
 
 
-      # ----------------------------------------------------
+      # ====================================================
       # DELETION PROTECTION
-      # ----------------------------------------------------
+      #
+      # Disabled for development so the stack can be
+      # deleted/recreated easily.
+      # ====================================================
 
       DeletionProtection: false
 
 
-      # ----------------------------------------------------
+      # ====================================================
       # TAGS
-      # ----------------------------------------------------
+      # ====================================================
 
       Tags:
 
@@ -205,12 +232,16 @@ Resources:
         - Key: Environment
           Value: dev
 
+        - Key: CostProfile
+          Value: FreeTier-Development
+
 
 # ==========================================================
 # OUTPUTS
 # ==========================================================
 
 Outputs:
+
 
   # --------------------------------------------------------
   # DATABASE IDENTIFIER
