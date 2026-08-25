@@ -64,25 +64,25 @@ Resources:
   # RDS DB SUBNET GROUP
   # ========================================================
 
-  CloudMartDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  # CloudMartDBSubnetGroup:
+  #   Type: AWS::RDS::DBSubnetGroup
 
-    Properties:
-      DBSubnetGroupDescription: "CloudMart RDS private subnet group"
+  #   Properties:
+  #     DBSubnetGroupDescription: "CloudMart RDS private subnet group"
 
-      SubnetIds:
-        - Fn::ImportValue: CloudMart-Private-Subnet-ID
-        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+  #     SubnetIds:
+  #       - Fn::ImportValue: CloudMart-Private-Subnet-ID
+  #       - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
 
-      Tags:
-        - Key: Name
-          Value: CloudMart-RDS-SubnetGroup
+  #     Tags:
+  #       - Key: Name
+  #         Value: CloudMart-RDS-SubnetGroup
 
-        - Key: Project
-          Value: CloudMart
+  #       - Key: Project
+  #         Value: CloudMart
 
-        - Key: Environment
-          Value: dev
+  #       - Key: Environment
+  #         Value: dev
 
 
   # ========================================================
