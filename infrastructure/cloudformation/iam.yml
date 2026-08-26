@@ -69,7 +69,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /app/${Environment}/auth/token
-      Type: SecureString
+      Type: String
       Value: !Ref AuthToken
       Description: Authorization token for Lambda Authorizer
 
@@ -117,7 +117,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /app/${Environment}/database/username
-      Type: SecureString
+      Type: String
       Value: !Ref DatabaseUsername
       Description: RDS database username
 
@@ -129,7 +129,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /app/${Environment}/database/password
-      Type: SecureString
+      Type: String
       Value: !Ref DatabasePassword
       Description: RDS database password
 
