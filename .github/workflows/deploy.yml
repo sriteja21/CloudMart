@@ -474,9 +474,15 @@ jobs:
             --stack-name cloudmart-data \
             --query 'Stacks[0].Outputs' \
             --output table
+    # ==========================================================
+  # JOB 5: DEPLOY IAM STACK
+  # ==========================================================
   deploy-iam:
 
     name: Deploy IAM Stack
+
+    needs:
+      - deploy-data
 
     runs-on: ubuntu-latest
 
@@ -508,10 +514,10 @@ jobs:
 
 
       # ------------------------------------------------------
-      # Deploy Data Stack
+      # Deploy IAM Stack
       #
-      # No parameter overrides are used currently.
-      # CloudFormation uses the Default values from data.yml.
+      # CloudFormation uses the Default values defined
+      # inside iam.yml for testing.
       # ------------------------------------------------------
       - name: Deploy IAM Stack
         shell: bash
@@ -520,21 +526,22 @@ jobs:
           set -e
 
           echo "=============================================="
-          echo "Deploying CloudMart Data Stack"
+          echo "Deploying CloudMart IAM Stack"
           echo "=============================================="
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/iam.yml \
-            --stack-name cloudmart-iam
+            --stack-name cloudmart-iam \
+            --capabilities CAPABILITY_NAMED_IAM
 
           echo ""
-          echo "Data Stack deployment completed successfully."
+          echo "IAM Stack deployment completed successfully."
 
 
       # ------------------------------------------------------
-      # Display Data Stack outputs
+      # Display IAM Stack outputs
       # ------------------------------------------------------
-      - name: Display Data Stack outputs
+      - name: Display IAM Stack outputs
         run: |
 
           echo "=============================================="
