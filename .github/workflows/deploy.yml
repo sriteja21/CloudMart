@@ -474,3 +474,74 @@ jobs:
             --stack-name cloudmart-data \
             --query 'Stacks[0].Outputs' \
             --output table
+  deploy-iam:
+
+    name: Deploy IAM Stack
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ------------------------------------------------------
+      # Checkout repository
+      # ------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ------------------------------------------------------
+      # Verify AWS authentication
+      # ------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # Deploy Data Stack
+      #
+      # No parameter overrides are used currently.
+      # CloudFormation uses the Default values from data.yml.
+      # ------------------------------------------------------
+      - name: Deploy IAM Stack
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "Deploying CloudMart Data Stack"
+          echo "=============================================="
+
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/iam.yml \
+            --stack-name cloudmart-iam
+
+          echo ""
+          echo "Data Stack deployment completed successfully."
+
+
+      # ------------------------------------------------------
+      # Display Data Stack outputs
+      # ------------------------------------------------------
+      - name: Display Data Stack outputs
+        run: |
+
+          echo "=============================================="
+          echo "IAM Stack Outputs"
+          echo "=============================================="
+
+          aws cloudformation describe-stacks \
+            --stack-name cloudmart-iam \
+            --query 'Stacks[0].Outputs' \
+            --output table

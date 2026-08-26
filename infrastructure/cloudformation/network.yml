@@ -593,11 +593,8 @@ Outputs:
   # --------------------------------------------------------
 
   PrivateRouteTableId:
-
     Description: CloudMart Private Route Table ID
-
     Value: !Ref PrivateRouteTable
-
     Export:
       Name: CloudMart-Private-RouteTable-ID
 
