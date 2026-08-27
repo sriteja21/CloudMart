@@ -2,10 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: CloudMart IAM and SSM Parameter Store Stack
 
+
 # ==========================================================
 # PARAMETERS
 # ==========================================================
-
 
 Parameters:
 
@@ -55,15 +55,16 @@ Parameters:
     Default: cloudmart-dev-reports-test
     Description: Test S3 bucket for daily reports
 
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
+
 Resources:
 
   # ========================================================
   # SSM PARAMETERS
   # ========================================================
-
-  # --------------------------------------------------------
-  # AUTH TOKEN
-  # --------------------------------------------------------
 
   AuthTokenParameter:
     Type: AWS::SSM::Parameter
@@ -73,10 +74,6 @@ Resources:
       Value: !Ref AuthToken
       Description: Authorization token for Lambda Authorizer
 
-  # --------------------------------------------------------
-  # DATABASE HOST
-  # --------------------------------------------------------
-
   DatabaseHostParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -84,10 +81,6 @@ Resources:
       Type: String
       Value: !Ref DatabaseHost
       Description: RDS database host
-
-  # --------------------------------------------------------
-  # DATABASE PORT
-  # --------------------------------------------------------
 
   DatabasePortParameter:
     Type: AWS::SSM::Parameter
@@ -97,10 +90,6 @@ Resources:
       Value: !Ref DatabasePort
       Description: RDS database port
 
-  # --------------------------------------------------------
-  # DATABASE NAME
-  # --------------------------------------------------------
-
   DatabaseNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -108,10 +97,6 @@ Resources:
       Type: String
       Value: !Ref DatabaseName
       Description: RDS database name
-
-  # --------------------------------------------------------
-  # DATABASE USERNAME
-  # --------------------------------------------------------
 
   DatabaseUsernameParameter:
     Type: AWS::SSM::Parameter
@@ -121,10 +106,6 @@ Resources:
       Value: !Ref DatabaseUsername
       Description: RDS database username
 
-  # --------------------------------------------------------
-  # DATABASE PASSWORD
-  # --------------------------------------------------------
-
   DatabasePasswordParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -132,10 +113,6 @@ Resources:
       Type: String
       Value: !Ref DatabasePassword
       Description: RDS database password
-
-  # --------------------------------------------------------
-  # REPORT S3 BUCKET
-  # --------------------------------------------------------
 
   ReportS3BucketParameter:
     Type: AWS::SSM::Parameter
@@ -147,118 +124,83 @@ Resources:
 
 
   # ========================================================
-  # LAMBDA EXECUTION ROLE
+  # PRODUCT AND ORDER LAMBDA EXECUTION ROLE
   # ========================================================
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+
     Properties:
-      RoleName: !Sub CloudMart-Lambda-Execution-Role-${Environment}
+
+      RoleName:
+        !Sub CloudMart-Lambda-Execution-Role-${Environment}
 
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
+
         Statement:
+
           - Effect: Allow
+
             Principal:
               Service:
                 - lambda.amazonaws.com
+
             Action:
               - sts:AssumeRole
 
       Policies:
 
+        # CloudWatch Logs
         - PolicyName: LambdaCloudWatchLogs
+
           PolicyDocument:
             Version: '2012-10-17'
+
             Statement:
 
               - Effect: Allow
+
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+
                 Resource: '*'
 
+
+        # Database configuration from SSM
         - PolicyName: LambdaDatabaseAccess
+
           PolicyDocument:
             Version: '2012-10-17'
+
             Statement:
 
               - Effect: Allow
+
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
+
                 Resource:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*
 
+
+        # EventBridge access
         - PolicyName: LambdaEventBridgeAccess
+
           PolicyDocument:
             Version: '2012-10-17'
+
             Statement:
 
               - Effect: Allow
+
                 Action:
                   - events:PutEvents
+
                 Resource: '*'
-
-
-  # ========================================================
-  # REPORT LAMBDA ROLE
-  # ========================================================
-
-  ReportLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub CloudMart-Report-Lambda-Role-${Environment}
-
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-
-      Policies:
-
-        - PolicyName: ReportLambdaCloudWatchLogs
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
-
-        - PolicyName: ReportLambdaSSMAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                Resource:
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*
-
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/s3/report-bucket
-
-        - PolicyName: ReportLambdaS3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}/*
 
 
   # ========================================================
@@ -267,43 +209,125 @@ Resources:
 
   LambdaAuthorizerRole:
     Type: AWS::IAM::Role
+
     Properties:
-      RoleName: !Sub CloudMart-Lambda-Authorizer-Role-${Environment}
+
+      RoleName:
+        !Sub CloudMart-Lambda-Authorizer-Role-${Environment}
 
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
+
         Statement:
+
           - Effect: Allow
+
             Principal:
               Service:
                 - lambda.amazonaws.com
+
             Action:
               - sts:AssumeRole
 
       Policies:
 
+        # Read authentication token from SSM
         - PolicyName: AuthorizerSSMAccess
+
           PolicyDocument:
             Version: '2012-10-17'
+
             Statement:
 
               - Effect: Allow
+
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
+
                 Resource:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
 
+
+        # CloudWatch Logs
         - PolicyName: AuthorizerCloudWatchLogs
+
           PolicyDocument:
             Version: '2012-10-17'
+
             Statement:
 
               - Effect: Allow
+
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+
+                Resource: '*'
+
+
+  # ========================================================
+  # CLOUDFORMATION EXECUTION ROLE
+  # ========================================================
+
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName:
+        !Sub CloudMart-CloudFormation-Execution-Role-${Environment}
+
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      Policies:
+
+        - PolicyName: CloudFormationDeploymentAccess
+
+          PolicyDocument:
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+
+                  - cloudformation:*
+
+                  - iam:*
+
+                  - lambda:*
+
+                  - apigateway:*
+
+                  - ssm:*
+
+                  - ec2:*
+
+                  - logs:*
+
+                  - rds:*
+
+                  - s3:*
+
+                  - events:*
+
+                  - sns:*
+
                 Resource: '*'
 
 
@@ -314,25 +338,48 @@ Resources:
 Outputs:
 
   LambdaExecutionRoleArn:
-    Description: Lambda execution role ARN
-    Value: !GetAtt LambdaExecutionRole.Arn
-    Export:
-      Name: !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-  ReportLambdaRoleArn:
-    Description: Report Lambda execution role ARN
-    Value: !GetAtt ReportLambdaRole.Arn
+    Description: Product and Order Lambda execution role ARN
+
+    Value:
+      !GetAtt LambdaExecutionRole.Arn
+
     Export:
-      Name: !Sub CloudMart-ReportLambdaRoleArn-${Environment}
+      Name:
+        !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+
 
   LambdaAuthorizerRoleArn:
+
     Description: Lambda Authorizer role ARN
-    Value: !GetAtt LambdaAuthorizerRole.Arn
+
+    Value:
+      !GetAtt LambdaAuthorizerRole.Arn
+
     Export:
-      Name: !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+      Name:
+        !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+
+
+  CloudFormationExecutionRoleArn:
+
+    Description: CloudFormation execution role ARN
+
+    Value:
+      !GetAtt CloudFormationExecutionRole.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-CloudFormationExecutionRoleArn-${Environment}
+
 
   ReportS3BucketParameterName:
+
     Description: SSM parameter containing the report S3 bucket name
-    Value: !Sub /app/${Environment}/s3/report-bucket
+
+    Value:
+      !Sub /app/${Environment}/s3/report-bucket
+
     Export:
-      Name: !Sub CloudMart-ReportS3BucketParameter-${Environment}
+      Name:
+        !Sub CloudMart-ReportS3BucketParameter-${Environment}
