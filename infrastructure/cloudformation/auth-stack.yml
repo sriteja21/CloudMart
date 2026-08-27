@@ -19,10 +19,6 @@ Parameters:
       - prod
     Description: Deployment environment
 
-  LambdaAuthorizerRoleArn:
-    Type: String
-    Description: ARN of the Lambda Authorizer IAM role created by the IAM stack
-
 
 # ==========================================================
 # RESOURCES
@@ -30,46 +26,109 @@ Parameters:
 
 Resources:
 
-  # Lambda Authorizer function used by API Gateway
+
+  # ========================================================
+  # LAMBDA AUTHORIZER
+  # ========================================================
+
   LambdaAuthorizer:
+
     Type: AWS::Serverless::Function
 
     Properties:
-      FunctionName: !Sub CloudMart-Lambda-Authorizer-${Environment}
+
+      FunctionName:
+        !Sub CloudMart-Lambda-Authorizer-${Environment}
+
+
+      # ----------------------------------------------------
+      # Lambda runtime
+      # ----------------------------------------------------
 
       Runtime: python3.12
 
+
+      # ----------------------------------------------------
+      # Lambda handler
+      # ----------------------------------------------------
+
       Handler: lambda_function.lambda_handler
+
+
+      # ----------------------------------------------------
+      # Lambda source code
+      # ----------------------------------------------------
 
       CodeUri: ../../src/authorizer/
 
-      Role: !Ref LambdaAuthorizerRoleArn
+
+      # ----------------------------------------------------
+      # IAM ROLE
+      #
+      # Import role created by IAM stack
+      # ----------------------------------------------------
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+
+
+      # ----------------------------------------------------
+      # Lambda configuration
+      # ----------------------------------------------------
 
       MemorySize: 128
 
       Timeout: 10
 
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref Environment
 
-      # VPC configuration for private Lambda execution
+      # ----------------------------------------------------
+      # Environment variables
+      # ----------------------------------------------------
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+
+      # ----------------------------------------------------
+      # VPC configuration
+      # ----------------------------------------------------
+
       VpcConfig:
+
         SecurityGroupIds:
+
           - Fn::ImportValue:
               !Sub CloudMart-Lambda-SG-ID
 
+
         SubnetIds:
+
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-ID
 
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-2-ID
 
+
+      # ----------------------------------------------------
+      # Tags
+      # ----------------------------------------------------
+
       Tags:
-        Project: CloudMart
-        Environment: !Ref Environment
-        Component: Authentication
+
+        Project:
+          CloudMart
+
+        Environment:
+          !Ref Environment
+
+        Component:
+          Authentication
 
 
 # ==========================================================
@@ -78,14 +137,38 @@ Resources:
 
 Outputs:
 
+
+  # ========================================================
+  # AUTHORIZE LAMBDA ARN
+  # ========================================================
+
   LambdaAuthorizerArn:
-    Description: ARN of the CloudMart Lambda Authorizer
-    Value: !GetAtt LambdaAuthorizer.Arn
+
+    Description:
+      ARN of the CloudMart Lambda Authorizer
+
+    Value:
+      !GetAtt LambdaAuthorizer.Arn
+
     Export:
-      Name: !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
+
+      Name:
+        !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
+
+
+  # ========================================================
+  # AUTHORIZE LAMBDA NAME
+  # ========================================================
 
   LambdaAuthorizerName:
-    Description: Name of the CloudMart Lambda Authorizer
-    Value: !Ref LambdaAuthorizer
+
+    Description:
+      Name of the CloudMart Lambda Authorizer
+
+    Value:
+      !Ref LambdaAuthorizer
+
     Export:
-      Name: !Sub CloudMart-Lambda-Authorizer-Name-${Environment}
+
+      Name:
+        !Sub CloudMart-Lambda-Authorizer-Name-${Environment}
