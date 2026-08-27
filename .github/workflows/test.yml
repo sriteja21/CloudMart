@@ -1,7 +1,10 @@
 name: Test and Deploy Auth Stack
 
 on:
-  workflow_dispatch:
+ push:
+    branches:
+      - authorizer
+  
 
 env:
   AWS_REGION: ap-south-1
