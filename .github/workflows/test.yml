@@ -1,9 +1,7 @@
-name: CloudMart Auth Stack Test
+name: Test and Deploy Auth Stack
 
 on:
-  push:
-    branches:
-      - authorizer
+  workflow_dispatch:
 
 env:
   AWS_REGION: ap-south-1
@@ -15,6 +13,10 @@ permissions:
 
 jobs:
 
+  # ==========================================================
+  # TEST AND DEPLOY AUTH STACK
+  # ==========================================================
+
   test-and-deploy:
 
     name: Test and Deploy Auth Stack
@@ -23,54 +25,80 @@ jobs:
 
     steps:
 
+      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # Configure AWS credentials using GitHub OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+
+      # Verify AWS authentication
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
+
+      # Install AWS SAM CLI
       - name: Install SAM CLI
         uses: aws-actions/setup-sam@v2
 
+
+      # Validate SAM template
       - name: Validate Auth Stack
         run: |
           sam validate \
             --template-file infrastructure/cloudformation/auth-stack.yml
 
+
+      # Build Lambda function
       - name: Build Auth Stack
         run: |
           sam build \
             --template-file infrastructure/cloudformation/auth-stack.yml
 
+
+      # Deploy Auth Stack
       - name: Deploy Auth Stack
         run: |
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
-            --stack-name $STACK_NAME \
-            --region $AWS_REGION \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --resolve-s3 \
             --capabilities CAPABILITY_IAM \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
+
+      # Display CloudFormation outputs
       - name: Display Auth Stack Outputs
         run: |
+          echo "=============================================="
+          echo "Auth Stack Outputs"
+          echo "=============================================="
+
           aws cloudformation describe-stacks \
-            --stack-name $STACK_NAME \
+            --stack-name "$STACK_NAME" \
             --query 'Stacks[0].Outputs' \
             --output table
 
-      - name: Test Lambda Authorizer
+
+      # Verify Lambda was created
+      - name: Verify Lambda Authorizer
         run: |
           aws lambda get-function \
             --function-name CloudMart-Lambda-Authorizer-dev
 
+
+      # Deployment completed
       - name: Deployment Successful
         run: |
-          echo "Auth Stack deployed successfully."
+          echo "=============================================="
+          echo "CloudMart Auth Stack deployed successfully."
+          echo "=============================================="
