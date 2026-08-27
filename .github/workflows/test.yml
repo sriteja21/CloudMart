@@ -1,7 +1,9 @@
 name: CloudMart Auth Stack Test
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - authorizer
 
 env:
   AWS_REGION: ap-south-1
