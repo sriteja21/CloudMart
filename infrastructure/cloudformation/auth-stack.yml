@@ -26,7 +26,6 @@ Parameters:
 
 Resources:
 
-
   # ========================================================
   # LAMBDA AUTHORIZER
   # ========================================================
@@ -40,51 +39,28 @@ Resources:
       FunctionName:
         !Sub CloudMart-Lambda-Authorizer-${Environment}
 
-
-      # ----------------------------------------------------
-      # Lambda runtime
-      # ----------------------------------------------------
-
       Runtime: python3.12
-
-
-      # ----------------------------------------------------
-      # Lambda handler
-      # ----------------------------------------------------
 
       Handler: lambda_function.lambda_handler
 
-
-      # ----------------------------------------------------
-      # Lambda source code
-      # ----------------------------------------------------
-
       CodeUri: ../../src/authorizer/
 
-
-      # ----------------------------------------------------
+      # ====================================================
       # IAM ROLE
-      #
       # Import role created by IAM stack
-      # ----------------------------------------------------
+      # ====================================================
 
       Role:
         Fn::ImportValue:
           !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
 
-
-      # ----------------------------------------------------
-      # Lambda configuration
-      # ----------------------------------------------------
-
       MemorySize: 128
 
       Timeout: 10
 
-
-      # ----------------------------------------------------
-      # Environment variables
-      # ----------------------------------------------------
+      # ====================================================
+      # ENVIRONMENT VARIABLES
+      # ====================================================
 
       Environment:
 
@@ -93,31 +69,12 @@ Resources:
           ENVIRONMENT:
             !Ref Environment
 
-
-      # ----------------------------------------------------
-      # VPC configuration
-      # ----------------------------------------------------
-
-      VpcConfig:
-
-        SecurityGroupIds:
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
-
-
-        SubnetIds:
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
-
-
-      # ----------------------------------------------------
-      # Tags
-      # ----------------------------------------------------
+      # ====================================================
+      # NO VPC CONFIGURATION
+      #
+      # The Authorizer does not need to access RDS.
+      # API Gateway can invoke it without VPC configuration.
+      # ====================================================
 
       Tags:
 
@@ -137,9 +94,8 @@ Resources:
 
 Outputs:
 
-
   # ========================================================
-  # AUTHORIZE LAMBDA ARN
+  # LAMBDA AUTHORIZE ARN
   # ========================================================
 
   LambdaAuthorizerArn:
@@ -157,7 +113,7 @@ Outputs:
 
 
   # ========================================================
-  # AUTHORIZE LAMBDA NAME
+  # LAMBDA AUTHORIZE NAME
   # ========================================================
 
   LambdaAuthorizerName:

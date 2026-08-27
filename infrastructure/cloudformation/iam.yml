@@ -74,7 +74,12 @@ Resources:
   # SSM PARAMETERS
   # ========================================================
 
+  # --------------------------------------------------------
+  # AUTHORIZATION TOKEN
+  # --------------------------------------------------------
+
   AuthTokenParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -91,7 +96,12 @@ Resources:
         Authorization token for Lambda Authorizer
 
 
+  # --------------------------------------------------------
+  # DATABASE HOST
+  # --------------------------------------------------------
+
   DatabaseHostParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -108,7 +118,12 @@ Resources:
         RDS database host
 
 
+  # --------------------------------------------------------
+  # DATABASE PORT
+  # --------------------------------------------------------
+
   DatabasePortParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -125,7 +140,12 @@ Resources:
         RDS database port
 
 
+  # --------------------------------------------------------
+  # DATABASE NAME
+  # --------------------------------------------------------
+
   DatabaseNameParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -142,7 +162,12 @@ Resources:
         RDS database name
 
 
+  # --------------------------------------------------------
+  # DATABASE USERNAME
+  # --------------------------------------------------------
+
   DatabaseUsernameParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -159,7 +184,12 @@ Resources:
         RDS database username
 
 
+  # --------------------------------------------------------
+  # DATABASE PASSWORD
+  # --------------------------------------------------------
+
   DatabasePasswordParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -176,7 +206,12 @@ Resources:
         RDS database password
 
 
+  # --------------------------------------------------------
+  # REPORT S3 BUCKET
+  # --------------------------------------------------------
+
   ReportS3BucketParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
@@ -198,12 +233,18 @@ Resources:
   # ========================================================
 
   LambdaExecutionRole:
+
     Type: AWS::IAM::Role
 
     Properties:
 
       RoleName:
         !Sub CloudMart-Lambda-Execution-Role-${Environment}
+
+
+      # ----------------------------------------------------
+      # Lambda assumes this role
+      # ----------------------------------------------------
 
       AssumeRolePolicyDocument:
 
@@ -214,6 +255,7 @@ Resources:
           - Effect: Allow
 
             Principal:
+
               Service:
                 - lambda.amazonaws.com
 
@@ -221,12 +263,16 @@ Resources:
               - sts:AssumeRole
 
 
+      # ----------------------------------------------------
+      # Permissions
+      # ----------------------------------------------------
+
       Policies:
 
 
-        # --------------------------------------------------
-        # CloudWatch Logs
-        # --------------------------------------------------
+        # ==================================================
+        # CLOUDWATCH LOGS
+        # ==================================================
 
         - PolicyName: LambdaCloudWatchLogs
 
@@ -247,9 +293,9 @@ Resources:
                 Resource: '*'
 
 
-        # --------------------------------------------------
-        # Database configuration from SSM
-        # --------------------------------------------------
+        # ==================================================
+        # DATABASE CONFIGURATION FROM SSM
+        # ==================================================
 
         - PolicyName: LambdaDatabaseAccess
 
@@ -271,9 +317,9 @@ Resources:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*
 
 
-        # --------------------------------------------------
-        # EventBridge access
-        # --------------------------------------------------
+        # ==================================================
+        # EVENTBRIDGE ACCESS
+        # ==================================================
 
         - PolicyName: LambdaEventBridgeAccess
 
@@ -292,9 +338,12 @@ Resources:
                 Resource: '*'
 
 
-        # --------------------------------------------------
-        # VPC access for Lambda
-        # --------------------------------------------------
+        # ==================================================
+        # VPC ACCESS
+        #
+        # Product / Order Lambdas that connect to RDS
+        # need these permissions.
+        # ==================================================
 
         - PolicyName: LambdaVPCAccess
 
@@ -322,12 +371,18 @@ Resources:
   # ========================================================
 
   LambdaAuthorizerRole:
+
     Type: AWS::IAM::Role
 
     Properties:
 
       RoleName:
         !Sub CloudMart-Lambda-Authorizer-Role-${Environment}
+
+
+      # ----------------------------------------------------
+      # Lambda assumes this role
+      # ----------------------------------------------------
 
       AssumeRolePolicyDocument:
 
@@ -338,6 +393,7 @@ Resources:
           - Effect: Allow
 
             Principal:
+
               Service:
                 - lambda.amazonaws.com
 
@@ -345,12 +401,43 @@ Resources:
               - sts:AssumeRole
 
 
+      # ----------------------------------------------------
+      # Authorizer permissions
+      #
+      # IMPORTANT:
+      # No VPC/EC2 permissions are required because
+      # the Lambda Authorizer is NOT inside the VPC.
+      # ----------------------------------------------------
+
       Policies:
 
 
-        # --------------------------------------------------
-        # Read authentication token from SSM
-        # --------------------------------------------------
+        # ==================================================
+        # CLOUDWATCH LOGS
+        # ==================================================
+
+        - PolicyName: AuthorizerCloudWatchLogs
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+
+                Resource: '*'
+
+
+        # ==================================================
+        # SSM AUTHORIZATION TOKEN ACCESS
+        # ==================================================
 
         - PolicyName: AuthorizerSSMAccess
 
@@ -372,65 +459,23 @@ Resources:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
 
 
-        # --------------------------------------------------
-        # CloudWatch Logs
-        # --------------------------------------------------
-
-        - PolicyName: AuthorizerCloudWatchLogs
-
-          PolicyDocument:
-
-            Version: '2012-10-17'
-
-            Statement:
-
-              - Effect: Allow
-
-                Action:
-
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-
-                Resource: '*'
-
-
-        # --------------------------------------------------
-        # VPC access for Lambda Authorizer
-        # --------------------------------------------------
-
-        - PolicyName: AuthorizerVPCAccess
-
-          PolicyDocument:
-
-            Version: '2012-10-17'
-
-            Statement:
-
-              - Effect: Allow
-
-                Action:
-
-                  - ec2:CreateNetworkInterface
-                  - ec2:DescribeNetworkInterfaces
-                  - ec2:DeleteNetworkInterface
-                  - ec2:AssignPrivateIpAddresses
-                  - ec2:UnassignPrivateIpAddresses
-
-                Resource: '*'
-
-
   # ========================================================
   # CLOUDFORMATION EXECUTION ROLE
   # ========================================================
 
   CloudFormationExecutionRole:
+
     Type: AWS::IAM::Role
 
     Properties:
 
       RoleName:
         !Sub CloudMart-CloudFormation-Execution-Role-${Environment}
+
+
+      # ----------------------------------------------------
+      # CloudFormation assumes this role
+      # ----------------------------------------------------
 
       AssumeRolePolicyDocument:
 
@@ -441,12 +486,17 @@ Resources:
           - Effect: Allow
 
             Principal:
+
               Service:
                 - cloudformation.amazonaws.com
 
             Action:
               - sts:AssumeRole
 
+
+      # ----------------------------------------------------
+      # CloudFormation deployment permissions
+      # ----------------------------------------------------
 
       Policies:
 
@@ -485,7 +535,7 @@ Outputs:
 
 
   # ========================================================
-  # PRODUCT / ORDER LAMBDA ROLE
+  # PRODUCT / ORDER LAMBDA ROLE ARN
   # ========================================================
 
   LambdaExecutionRoleArn:
@@ -503,7 +553,7 @@ Outputs:
 
 
   # ========================================================
-  # LAMBDA AUTHORIZER ROLE
+  # LAMBDA AUTHORIZER ROLE ARN
   # ========================================================
 
   LambdaAuthorizerRoleArn:
@@ -521,7 +571,7 @@ Outputs:
 
 
   # ========================================================
-  # CLOUDFORMATION EXECUTION ROLE
+  # CLOUDFORMATION EXECUTION ROLE ARN
   # ========================================================
 
   CloudFormationExecutionRoleArn:
@@ -539,7 +589,7 @@ Outputs:
 
 
   # ========================================================
-  # REPORT S3 BUCKET PARAMETER
+  # REPORT S3 BUCKET PARAMETER NAME
   # ========================================================
 
   ReportS3BucketParameterName:
