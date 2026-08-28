@@ -3,7 +3,9 @@ name: CloudMart Infrastructure Deployment
 # ============================================================
 # WORKFLOW TRIGGERS
 # ============================================================
+
 on:
+
   push:
     branches:
       - main
@@ -14,27 +16,36 @@ on:
 # ============================================================
 # GLOBAL ENVIRONMENT VARIABLES
 # ============================================================
+
 env:
+
   AWS_REGION: ap-south-1
+
   CFN_BUCKET: cloudmart-cfn-templates
 
 
 # ============================================================
 # GITHUB OIDC PERMISSIONS
 # ============================================================
+
 permissions:
+
   id-token: write
+
   contents: read
 
 
 # ============================================================
 # JOBS
 # ============================================================
+
 jobs:
 
-  # 3
+
+  # ==========================================================
   # JOB 1: LINT AND VALIDATE ALL CLOUDFORMATION TEMPLATES
   # ==========================================================
+
   validate-cloudformation:
 
     name: Lint and Validate CloudFormation
@@ -43,88 +54,135 @@ jobs:
 
     steps:
 
+
       # ------------------------------------------------------
       # Checkout repository
       # ------------------------------------------------------
+
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
       # Install cfn-lint
       # ------------------------------------------------------
+
       - name: Install cfn-lint
+
         run: |
+
           python -m pip install --upgrade pip
+
           pip install cfn-lint
 
 
       # ------------------------------------------------------
       # Find and lint ALL CloudFormation templates
       # ------------------------------------------------------
+
       - name: Lint all CloudFormation templates
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Searching for CloudFormation templates..."
+
           echo "=============================================="
 
+
           mapfile -t templates < <(
+
             find infrastructure/cloudformation \
               -type f \
               \( -name "*.yml" -o -name "*.yaml" \)
+
           )
 
+
           if [ ${#templates[@]} -eq 0 ]; then
+
             echo "ERROR: No CloudFormation templates found."
+
             exit 1
+
           fi
 
+
           echo ""
+
           echo "Templates found:"
+
           printf '%s\n' "${templates[@]}"
 
+
           echo ""
-          echo "=============================================="
-          echo "Starting cfn-lint"
+
           echo "=============================================="
 
+          echo "Starting cfn-lint"
+
+          echo "=============================================="
+
+
           for template in "${templates[@]}"
+
           do
+
             echo ""
+
             echo "----------------------------------------------"
+
             echo "Linting: $template"
+
             echo "----------------------------------------------"
+
 
             cfn-lint "$template"
 
+
             echo "Lint successful: $template"
+
           done
 
+
           echo ""
+
           echo "=============================================="
+
           echo "All CloudFormation templates passed cfn-lint"
+
           echo "=============================================="
 
 
       # ------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
+      # Configure AWS credentials
       # ------------------------------------------------------
+
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
 
       # ------------------------------------------------------
       # Verify AWS authentication
       # ------------------------------------------------------
+
       - name: Verify AWS identity
+
         run: |
+
           echo "Checking AWS identity..."
 
           aws sts get-caller-identity
@@ -135,44 +193,66 @@ jobs:
       # ------------------------------------------------------
       # AWS CloudFormation validation
       # ------------------------------------------------------
+
       - name: Validate all CloudFormation templates
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Starting AWS CloudFormation validation"
+
           echo "=============================================="
 
+
           mapfile -t templates < <(
+
             find infrastructure/cloudformation \
               -type f \
               \( -name "*.yml" -o -name "*.yaml" \)
+
           )
 
+
           for template in "${templates[@]}"
+
           do
+
             echo ""
+
             echo "----------------------------------------------"
+
             echo "AWS validating: $template"
+
             echo "----------------------------------------------"
+
 
             aws cloudformation validate-template \
               --template-body "file://$template"
 
+
             echo "AWS validation successful: $template"
+
           done
 
+
           echo ""
+
           echo "=============================================="
+
           echo "All CloudFormation templates passed AWS validation"
+
           echo "=============================================="
 
 
   # ==========================================================
   # JOB 2: CREATE S3 BUCKET AND UPLOAD CLOUDFORMATION
   # ==========================================================
+
   upload-cloudformation:
 
     name: Upload CloudFormation Templates to S3
@@ -184,62 +264,88 @@ jobs:
 
     steps:
 
+
       # ------------------------------------------------------
       # Checkout repository
       # ------------------------------------------------------
+
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
       # Configure AWS credentials
       # ------------------------------------------------------
+
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
 
       # ------------------------------------------------------
       # Verify AWS authentication
       # ------------------------------------------------------
+
       - name: Verify AWS identity
+
         run: |
+
           aws sts get-caller-identity
 
 
       # ------------------------------------------------------
-      # Create S3 bucket if it does not exist
+      # Create S3 bucket if required
       # ------------------------------------------------------
+
       - name: Create CloudFormation S3 bucket if needed
+
         shell: bash
+
         run: |
 
           set -e
 
           BUCKET_NAME="${CFN_BUCKET}"
 
+
           echo "=============================================="
+
           echo "Checking S3 bucket"
+
           echo "Bucket: ${BUCKET_NAME}"
+
           echo "Region: ${AWS_REGION}"
+
           echo "=============================================="
+
 
           if aws s3api head-bucket \
             --bucket "${BUCKET_NAME}" \
             2>/dev/null
+
           then
 
             echo ""
+
             echo "S3 bucket already exists."
+
             echo "No bucket creation required."
 
           else
 
             echo ""
+
             echo "S3 bucket does not exist."
+
             echo "Creating bucket..."
+
 
             if [ "${AWS_REGION}" = "us-east-1" ]; then
 
@@ -257,7 +363,9 @@ jobs:
 
             fi
 
+
             echo ""
+
             echo "S3 bucket created successfully."
 
           fi
@@ -266,32 +374,42 @@ jobs:
       # ------------------------------------------------------
       # Enable S3 versioning
       # ------------------------------------------------------
+
       - name: Enable S3 bucket versioning
+
         run: |
 
           set -e
 
           echo "Enabling S3 bucket versioning..."
 
+
           aws s3api put-bucket-versioning \
             --bucket "${CFN_BUCKET}" \
             --versioning-configuration Status=Enabled
+
 
           echo "S3 bucket versioning enabled."
 
 
       # ------------------------------------------------------
-      # Upload ALL CloudFormation templates
+      # Upload CloudFormation templates
       # ------------------------------------------------------
+
       - name: Upload CloudFormation templates to S3
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Uploading CloudFormation templates to S3"
+
           echo "=============================================="
+
 
           aws s3 sync \
             infrastructure/cloudformation/ \
@@ -300,19 +418,26 @@ jobs:
             --include "*.yml" \
             --include "*.yaml"
 
+
           echo ""
+
           echo "CloudFormation templates uploaded successfully."
 
 
       # ------------------------------------------------------
       # Display uploaded templates
       # ------------------------------------------------------
+
       - name: List CloudFormation templates in S3
+
         run: |
 
           echo "=============================================="
+
           echo "CloudFormation templates currently in S3"
+
           echo "=============================================="
+
 
           aws s3 ls \
             "s3://${CFN_BUCKET}/cloudformation/" \
@@ -322,6 +447,7 @@ jobs:
   # ==========================================================
   # JOB 3: DEPLOY NETWORK STACK
   # ==========================================================
+
   deploy-network:
 
     name: Deploy Network Stack
@@ -333,73 +459,96 @@ jobs:
 
     steps:
 
+
       # ------------------------------------------------------
       # Checkout repository
       # ------------------------------------------------------
+
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
       # Configure AWS credentials
       # ------------------------------------------------------
+
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
 
       # ------------------------------------------------------
       # Verify AWS authentication
       # ------------------------------------------------------
+
       - name: Verify AWS identity
+
         run: |
+
           aws sts get-caller-identity
 
 
       # ------------------------------------------------------
       # Deploy Network Stack
-      #
-      # No --parameter-overrides are required because
-      # CloudFormation will use the Default values defined
-      # inside network.yml.
       # ------------------------------------------------------
+
       - name: Deploy Network Stack
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Deploying CloudMart Network Stack"
+
           echo "=============================================="
+
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/network.yml \
             --stack-name cloudmart-network
 
+
           echo ""
+
           echo "Network Stack deployment completed successfully."
 
 
       # ------------------------------------------------------
       # Display Network Stack outputs
       # ------------------------------------------------------
+
       - name: Display Network Stack outputs
+
         run: |
 
           echo "=============================================="
+
           echo "Network Stack Outputs"
+
           echo "=============================================="
+
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-network \
             --query 'Stacks[0].Outputs' \
             --output table
+
+
   # ==========================================================
   # JOB 4: DEPLOY DATA STACK
   # ==========================================================
+
   deploy-data:
 
     name: Deploy Data Stack
@@ -411,72 +560,96 @@ jobs:
 
     steps:
 
+
       # ------------------------------------------------------
       # Checkout repository
       # ------------------------------------------------------
+
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
+      # Configure AWS credentials
       # ------------------------------------------------------
+
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
 
       # ------------------------------------------------------
       # Verify AWS authentication
       # ------------------------------------------------------
+
       - name: Verify AWS identity
+
         run: |
+
           aws sts get-caller-identity
 
 
       # ------------------------------------------------------
       # Deploy Data Stack
-      #
-      # No parameter overrides are used currently.
-      # CloudFormation uses the Default values from data.yml.
       # ------------------------------------------------------
+
       - name: Deploy Data Stack
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Deploying CloudMart Data Stack"
+
           echo "=============================================="
+
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/data.yml \
             --stack-name cloudmart-data
 
+
           echo ""
+
           echo "Data Stack deployment completed successfully."
 
 
       # ------------------------------------------------------
       # Display Data Stack outputs
       # ------------------------------------------------------
+
       - name: Display Data Stack outputs
+
         run: |
 
           echo "=============================================="
+
           echo "Data Stack Outputs"
+
           echo "=============================================="
+
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-data \
             --query 'Stacks[0].Outputs' \
             --output table
-    # ==========================================================
+
+
+  # ==========================================================
   # JOB 5: DEPLOY IAM STACK
   # ==========================================================
+
   deploy-iam:
 
     name: Deploy IAM Stack
@@ -488,67 +661,388 @@ jobs:
 
     steps:
 
+
       # ------------------------------------------------------
       # Checkout repository
       # ------------------------------------------------------
+
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
-      # Configure AWS credentials using GitHub OIDC
+      # Configure AWS credentials
       # ------------------------------------------------------
+
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
 
       # ------------------------------------------------------
       # Verify AWS authentication
       # ------------------------------------------------------
+
       - name: Verify AWS identity
+
         run: |
+
           aws sts get-caller-identity
 
 
       # ------------------------------------------------------
       # Deploy IAM Stack
-      #
-      # CloudFormation uses the Default values defined
-      # inside iam.yml for testing.
       # ------------------------------------------------------
+
       - name: Deploy IAM Stack
+
         shell: bash
+
         run: |
 
           set -e
 
           echo "=============================================="
+
           echo "Deploying CloudMart IAM Stack"
+
           echo "=============================================="
+
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/iam.yml \
             --stack-name cloudmart-iam \
             --capabilities CAPABILITY_NAMED_IAM
 
+
           echo ""
+
           echo "IAM Stack deployment completed successfully."
+
+
+      # ------------------------------------------------------
+      # Verify Authorizer IAM role export
+      # ------------------------------------------------------
+
+      - name: Verify Lambda Authorizer IAM Role Export
+
+        shell: bash
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Checking Lambda Authorizer IAM Role Export"
+
+          echo "=============================================="
+
+
+          EXPORT_VALUE=$(
+
+            aws cloudformation list-exports \
+              --region "$AWS_REGION" \
+              --query "Exports[?Name=='CloudMart-LambdaAuthorizerRoleArn-dev'].Value | [0]" \
+              --output text
+
+          )
+
+
+          if [ -z "$EXPORT_VALUE" ] || [ "$EXPORT_VALUE" = "None" ]; then
+
+            echo "ERROR: Lambda Authorizer IAM role export was not found."
+
+            echo "Expected export: CloudMart-LambdaAuthorizerRoleArn-dev"
+
+            exit 1
+
+          fi
+
+
+          echo "Lambda Authorizer IAM role export found."
+
+          echo "Export value: $EXPORT_VALUE"
 
 
       # ------------------------------------------------------
       # Display IAM Stack outputs
       # ------------------------------------------------------
+
       - name: Display IAM Stack outputs
+
         run: |
 
           echo "=============================================="
+
           echo "IAM Stack Outputs"
+
           echo "=============================================="
+
 
           aws cloudformation describe-stacks \
             --stack-name cloudmart-iam \
             --query 'Stacks[0].Outputs' \
             --output table
+
+
+  # ==========================================================
+  # JOB 6: TEST AND DEPLOY AUTH STACK
+  # ==========================================================
+
+  deploy-auth:
+
+    name: Test and Deploy Auth Stack
+
+    needs:
+      - deploy-iam
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+
+      # ------------------------------------------------------
+      # Checkout repository
+      # ------------------------------------------------------
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
+
+      - name: Configure AWS credentials
+
+        uses: aws-actions/configure-aws-credentials@v5
+
+        with:
+
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ------------------------------------------------------
+      # Verify AWS authentication
+      # ------------------------------------------------------
+
+      - name: Verify AWS identity
+
+        run: |
+
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # Install AWS SAM CLI
+      # ------------------------------------------------------
+
+      - name: Install SAM CLI
+
+        uses: aws-actions/setup-sam@v2
+
+
+      # ------------------------------------------------------
+      # Validate Auth Stack
+      # ------------------------------------------------------
+
+      - name: Validate Auth Stack
+
+        run: |
+
+          sam validate \
+            --template-file infrastructure/cloudformation/auth-stack.yml
+
+
+      # ------------------------------------------------------
+      # Build Auth Stack
+      # ------------------------------------------------------
+
+      - name: Build Auth Stack
+
+        run: |
+
+          sam build \
+            --template-file infrastructure/cloudformation/auth-stack.yml
+
+
+      # ------------------------------------------------------
+      # Verify IAM role export
+      # ------------------------------------------------------
+
+      - name: Verify Lambda Authorizer IAM Role Export
+
+        run: |
+
+          echo "=============================================="
+
+          echo "Checking IAM stack export..."
+
+          echo "=============================================="
+
+
+          aws cloudformation list-exports \
+            --region "$AWS_REGION" \
+            --query "Exports[?Name=='CloudMart-LambdaAuthorizerRoleArn-dev'].[Name,Value]" \
+            --output table
+
+
+      # ------------------------------------------------------
+      # Deploy Auth Stack
+      # ------------------------------------------------------
+
+      - name: Deploy Auth Stack
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Deploying CloudMart Auth Stack"
+
+          echo "=============================================="
+
+
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name cloudmart-auth \
+            --region "$AWS_REGION" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+
+          echo ""
+
+          echo "Auth Stack deployment completed successfully."
+
+
+      # ------------------------------------------------------
+      # Display Auth Stack outputs
+      # ------------------------------------------------------
+
+      - name: Display Auth Stack Outputs
+
+        run: |
+
+          echo "=============================================="
+
+          echo "Auth Stack Outputs"
+
+          echo "=============================================="
+
+
+          aws cloudformation describe-stacks \
+            --stack-name cloudmart-auth \
+            --region "$AWS_REGION" \
+            --query 'Stacks[0].Outputs' \
+            --output table
+
+
+      # ------------------------------------------------------
+      # Verify Lambda Authorizer
+      # ------------------------------------------------------
+
+      - name: Verify Lambda Authorizer
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Verifying Lambda Authorizer"
+
+          echo "=============================================="
+
+
+          aws lambda get-function \
+            --function-name CloudMart-Lambda-Authorizer-dev \
+            --region "$AWS_REGION"
+
+
+          echo ""
+
+          echo "Lambda Authorizer verification successful."
+
+
+      # ------------------------------------------------------
+      # Deployment completed
+      # ------------------------------------------------------
+
+      - name: Deployment Successful
+
+        run: |
+
+          echo ""
+
+          echo "=============================================="
+
+          echo "CloudMart Auth Stack deployed successfully."
+
+          echo "=============================================="
+
+
+  # ==========================================================
+  # JOB 7: COMPLETE DEPLOYMENT
+  # ==========================================================
+
+  deployment-complete:
+
+    name: CloudMart Deployment Complete
+
+    needs:
+      - deploy-auth
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deployment Complete
+
+        run: |
+
+          echo ""
+
+          echo "===================================================="
+
+          echo "        CLOUDMART DEPLOYMENT SUCCESSFUL"
+
+          echo "===================================================="
+
+          echo ""
+
+          echo "Stacks deployed successfully:"
+
+          echo ""
+
+          echo "1. cloudmart-network"
+
+          echo "2. cloudmart-data"
+
+          echo "3. cloudmart-iam"
+
+          echo "4. cloudmart-auth"
+
+          echo ""
+
+          echo "Lambda Authorizer:"
+
+          echo "CloudMart-Lambda-Authorizer-dev"
+
+          echo ""
+
+          echo "===================================================="
