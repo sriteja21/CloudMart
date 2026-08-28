@@ -9,6 +9,10 @@ Description: CloudMart IAM and SSM Parameter Store Stack
 
 Parameters:
 
+  # --------------------------------------------------------
+  # ENVIRONMENT
+  # --------------------------------------------------------
+
   Environment:
 
     Type: String
@@ -22,6 +26,10 @@ Parameters:
     Description: Deployment environment
 
 
+  # --------------------------------------------------------
+  # AUTHORIZATION TOKEN
+  # --------------------------------------------------------
+
   AuthToken:
 
     Type: String
@@ -30,8 +38,12 @@ Parameters:
 
     NoEcho: true
 
-    Description: Authorization token for development
+    Description: Authorization token for Lambda Authorizer
 
+
+  # --------------------------------------------------------
+  # REPORT S3 BUCKET
+  # --------------------------------------------------------
 
   ReportS3BucketName:
 
@@ -138,7 +150,74 @@ Resources:
 
 
   # ========================================================
-  # REPORT BUCKET
+  # DATABASE USERNAME
+  #
+  # Automatically obtained from the RDS Secrets Manager
+  # secret created by the database stack.
+  # ========================================================
+
+  DatabaseUsernameParameter:
+
+    Type: AWS::SSM::Parameter
+
+    Properties:
+
+      Name:
+        !Sub /app/${Environment}/database/username
+
+      Type: String
+
+      Value:
+
+        Fn::Sub:
+
+          - '{{resolve:secretsmanager:${SecretArn}:SecretString:username}}'
+
+          - SecretArn:
+              Fn::ImportValue: CloudMart-DatabaseSecretArn
+
+      Description:
+        RDS database username obtained from Secrets Manager
+
+
+  # ========================================================
+  # DATABASE PASSWORD
+  #
+  # Automatically obtained from the RDS Secrets Manager
+  # secret created by the database stack.
+  #
+  # NOTE:
+  # This copies the secret value into SSM as a String.
+  # For production, preferably read the password directly
+  # from Secrets Manager instead.
+  # ========================================================
+
+  DatabasePasswordParameter:
+
+    Type: AWS::SSM::Parameter
+
+    Properties:
+
+      Name:
+        !Sub /app/${Environment}/database/password
+
+      Type: String
+
+      Value:
+
+        Fn::Sub:
+
+          - '{{resolve:secretsmanager:${SecretArn}:SecretString:password}}'
+
+          - SecretArn:
+              Fn::ImportValue: CloudMart-DatabaseSecretArn
+
+      Description:
+        RDS database password obtained from Secrets Manager
+
+
+  # ========================================================
+  # REPORT S3 BUCKET
   # ========================================================
 
   ReportS3BucketParameter:
@@ -160,7 +239,7 @@ Resources:
 
 
   # ========================================================
-  # PRODUCT / ORDER LAMBDA ROLE
+  # PRODUCT / ORDER LAMBDA EXECUTION ROLE
   # ========================================================
 
   LambdaExecutionRole:
@@ -171,6 +250,11 @@ Resources:
 
       RoleName:
         !Sub CloudMart-Lambda-Execution-Role-${Environment}
+
+
+      # ------------------------------------------------------
+      # TRUST POLICY
+      # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
 
@@ -189,12 +273,16 @@ Resources:
               - sts:AssumeRole
 
 
+      # ------------------------------------------------------
+      # LAMBDA POLICIES
+      # ------------------------------------------------------
+
       Policies:
 
 
-        # ==================================================
+        # ====================================================
         # CLOUDWATCH LOGS
-        # ==================================================
+        # ====================================================
 
         - PolicyName: LambdaCloudWatchLogs
 
@@ -215,9 +303,9 @@ Resources:
                 Resource: '*'
 
 
-        # ==================================================
+        # ====================================================
         # SSM DATABASE CONFIGURATION
-        # ==================================================
+        # ====================================================
 
         - PolicyName: LambdaDatabaseSSMAccess
 
@@ -239,9 +327,12 @@ Resources:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*
 
 
-        # ==================================================
+        # ====================================================
         # SECRETS MANAGER
-        # ==================================================
+        #
+        # Kept because other Lambda functions may read
+        # the database secret directly.
+        # ====================================================
 
         - PolicyName: LambdaDatabaseSecretAccess
 
@@ -262,9 +353,9 @@ Resources:
                   Fn::ImportValue: CloudMart-DatabaseSecretArn
 
 
-        # ==================================================
+        # ====================================================
         # EVENTBRIDGE
-        # ==================================================
+        # ====================================================
 
         - PolicyName: LambdaEventBridgeAccess
 
@@ -283,9 +374,11 @@ Resources:
                 Resource: '*'
 
 
-        # ==================================================
+        # ====================================================
         # VPC NETWORK INTERFACES
-        # ==================================================
+        #
+        # Required because Lambda runs inside the VPC.
+        # ====================================================
 
         - PolicyName: LambdaVPCAccess
 
@@ -321,6 +414,11 @@ Resources:
       RoleName:
         !Sub CloudMart-Lambda-Authorizer-Role-${Environment}
 
+
+      # ------------------------------------------------------
+      # TRUST POLICY
+      # ------------------------------------------------------
+
       AssumeRolePolicyDocument:
 
         Version: '2012-10-17'
@@ -338,12 +436,16 @@ Resources:
               - sts:AssumeRole
 
 
+      # ------------------------------------------------------
+      # POLICIES
+      # ------------------------------------------------------
+
       Policies:
 
 
-        # ==================================================
-        # CLOUDWATCH
-        # ==================================================
+        # ====================================================
+        # CLOUDWATCH LOGS
+        # ====================================================
 
         - PolicyName: AuthorizerCloudWatchLogs
 
@@ -364,9 +466,9 @@ Resources:
                 Resource: '*'
 
 
-        # ==================================================
-        # AUTH TOKEN
-        # ==================================================
+        # ====================================================
+        # AUTH TOKEN FROM SSM
+        # ====================================================
 
         - PolicyName: AuthorizerSSMAccess
 
@@ -401,6 +503,11 @@ Resources:
       RoleName:
         !Sub CloudMart-CloudFormation-Execution-Role-${Environment}
 
+
+      # ------------------------------------------------------
+      # TRUST POLICY
+      # ------------------------------------------------------
+
       AssumeRolePolicyDocument:
 
         Version: '2012-10-17'
@@ -417,6 +524,10 @@ Resources:
             Action:
               - sts:AssumeRole
 
+
+      # ------------------------------------------------------
+      # DEPLOYMENT POLICY
+      # ------------------------------------------------------
 
       Policies:
 
@@ -455,6 +566,10 @@ Resources:
 Outputs:
 
 
+  # --------------------------------------------------------
+  # LAMBDA EXECUTION ROLE ARN
+  # --------------------------------------------------------
+
   LambdaExecutionRoleArn:
 
     Description:
@@ -464,9 +579,14 @@ Outputs:
       !GetAtt LambdaExecutionRole.Arn
 
     Export:
+
       Name:
         !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
+
+  # --------------------------------------------------------
+  # LAMBDA AUTHORIZER ROLE ARN
+  # --------------------------------------------------------
 
   LambdaAuthorizerRoleArn:
 
@@ -477,9 +597,14 @@ Outputs:
       !GetAtt LambdaAuthorizerRole.Arn
 
     Export:
+
       Name:
         !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
 
+
+  # --------------------------------------------------------
+  # CLOUDFORMATION EXECUTION ROLE ARN
+  # --------------------------------------------------------
 
   CloudFormationExecutionRoleArn:
 
@@ -490,9 +615,14 @@ Outputs:
       !GetAtt CloudFormationExecutionRole.Arn
 
     Export:
+
       Name:
         !Sub CloudMart-CloudFormationExecutionRoleArn-${Environment}
 
+
+  # --------------------------------------------------------
+  # REPORT BUCKET PARAMETER
+  # --------------------------------------------------------
 
   ReportS3BucketParameterName:
 
@@ -503,5 +633,42 @@ Outputs:
       !Sub /app/${Environment}/s3/report-bucket
 
     Export:
+
       Name:
         !Sub CloudMart-ReportS3BucketParameter-${Environment}
+
+
+  # --------------------------------------------------------
+  # DATABASE USERNAME PARAMETER
+  # --------------------------------------------------------
+
+  DatabaseUsernameParameterName:
+
+    Description:
+      SSM parameter containing the RDS database username
+
+    Value:
+      !Sub /app/${Environment}/database/username
+
+    Export:
+
+      Name:
+        !Sub CloudMart-DatabaseUsernameParameter-${Environment}
+
+
+  # --------------------------------------------------------
+  # DATABASE PASSWORD PARAMETER
+  # --------------------------------------------------------
+
+  DatabasePasswordParameterName:
+
+    Description:
+      SSM parameter containing the RDS database password
+
+    Value:
+      !Sub /app/${Environment}/database/password
+
+    Export:
+
+      Name:
+        !Sub CloudMart-DatabasePasswordParameter-${Environment}
