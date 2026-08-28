@@ -3,7 +3,7 @@ name: Test and Deploy Event Driven Stack
 on:
   push:
     branches:
-      - event-driven
+      - product-api
 
   workflow_dispatch:
 
