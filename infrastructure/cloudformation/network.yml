@@ -373,7 +373,7 @@ Resources:
   # LAMBDA SECURITY GROUP
   # ========================================================
 
-  LambdaSecurityGroup:
+    LambdaSecurityGroup:
 
     Type: AWS::EC2::SecurityGroup
 
@@ -382,6 +382,14 @@ Resources:
       GroupDescription: Security group for CloudMart Lambda functions
 
       VpcId: !Ref CloudMartVPC
+
+      SecurityGroupIngress:
+
+        # Allow Lambda to access the SSM Interface Endpoint
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
       SecurityGroupEgress:
 
@@ -395,7 +403,6 @@ Resources:
 
         - Key: Project
           Value: CloudMart
-
 
   # ========================================================
   # RDS SECURITY GROUP
