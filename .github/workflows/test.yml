@@ -1,0 +1,693 @@
+name: Test and Deploy Product API
+
+
+# ==========================================================
+# WORKFLOW TRIGGER
+# ==========================================================
+
+on:
+
+  push:
+
+    branches:
+      - product-api
+
+  workflow_dispatch:
+
+
+# ==========================================================
+# ENVIRONMENT
+# ==========================================================
+
+env:
+
+  AWS_REGION: ap-south-1
+
+  STACK_NAME: cloudmart-application
+
+
+# ==========================================================
+# GITHUB OIDC PERMISSIONS
+# ==========================================================
+
+permissions:
+
+  id-token: write
+
+  contents: read
+
+
+# ==========================================================
+# JOB
+# ==========================================================
+
+jobs:
+
+  test-and-deploy:
+
+    name: Test and Deploy Product API
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+
+      # ======================================================
+      # CONFIGURE AWS CREDENTIALS
+      # ======================================================
+
+      - name: Configure AWS credentials
+
+        uses: aws-actions/configure-aws-credentials@v5
+
+        with:
+
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ======================================================
+      # VERIFY AWS AUTHENTICATION
+      # ======================================================
+
+      - name: Verify AWS identity
+
+        run: |
+
+          echo "=============================================="
+
+          echo "AWS Identity"
+
+          echo "=============================================="
+
+          aws sts get-caller-identity
+
+
+      # ======================================================
+      # INSTALL AWS SAM CLI
+      # ======================================================
+
+      - name: Install SAM CLI
+
+        uses: aws-actions/setup-sam@v2
+
+
+      # ======================================================
+      # VERIFY REQUIRED FILES
+      # ======================================================
+
+      - name: Verify Product API files
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Checking Product API files"
+
+          echo "=============================================="
+
+
+          test -f infrastructure/cloudformation/application.yml
+
+          test -f src/product/lambda_function.py
+
+          test -f src/product/requirements.txt
+
+          test -f src/product/schema.sql
+
+
+          echo ""
+
+          echo "Required Product API files found."
+
+          echo ""
+
+          echo "Application template:"
+
+          ls -lh infrastructure/cloudformation/application.yml
+
+          echo ""
+
+          echo "Product Lambda:"
+
+          ls -lh src/product/lambda_function.py
+
+          echo ""
+
+          echo "Requirements:"
+
+          ls -lh src/product/requirements.txt
+
+          echo ""
+
+          echo "Database schema:"
+
+          ls -lh src/product/schema.sql
+
+
+      # ======================================================
+      # VALIDATE APPLICATION STACK
+      # ======================================================
+
+      - name: Validate Product API Stack
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Validating Product API SAM template"
+
+          echo "=============================================="
+
+
+          sam validate \
+            --template-file infrastructure/cloudformation/application.yml
+
+
+          echo ""
+
+          echo "SAM validation successful."
+
+
+      # ======================================================
+      # BUILD PRODUCT API
+      # ======================================================
+
+      - name: Build Product API
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Building Product API"
+
+          echo "=============================================="
+
+
+          sam build \
+            --template-file infrastructure/cloudformation/application.yml
+
+
+          echo ""
+
+          echo "SAM build successful."
+
+
+      # ======================================================
+      # VERIFY IAM ROLE EXPORT
+      # ======================================================
+
+      - name: Verify Lambda Execution Role Export
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Checking IAM Lambda execution role export"
+
+          echo "=============================================="
+
+
+          EXPORT_VALUE=$(
+
+            aws cloudformation list-exports \
+              --region "$AWS_REGION" \
+              --query "Exports[?Name=='CloudMart-LambdaExecutionRoleArn-dev'].Value | [0]" \
+              --output text
+
+          )
+
+
+          if [ -z "$EXPORT_VALUE" ] || [ "$EXPORT_VALUE" = "None" ]; then
+
+            echo "ERROR: Lambda execution role export was not found."
+
+            echo "Expected export: CloudMart-LambdaExecutionRoleArn-dev"
+
+            exit 1
+
+          fi
+
+
+          echo "Lambda execution role export found."
+
+          echo "Role ARN: $EXPORT_VALUE"
+
+
+      # ======================================================
+      # VERIFY AUTHORIZER EXPORT
+      # ======================================================
+
+      - name: Verify Lambda Authorizer Export
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Checking Lambda Authorizer export"
+
+          echo "=============================================="
+
+
+          EXPORT_VALUE=$(
+
+            aws cloudformation list-exports \
+              --region "$AWS_REGION" \
+              --query "Exports[?Name=='CloudMart-Lambda-Authorizer-Arn-dev'].Value | [0]" \
+              --output text
+
+          )
+
+
+          if [ -z "$EXPORT_VALUE" ] || [ "$EXPORT_VALUE" = "None" ]; then
+
+            echo "ERROR: Lambda Authorizer export was not found."
+
+            echo "Expected export: CloudMart-Lambda-Authorizer-Arn-dev"
+
+            exit 1
+
+          fi
+
+
+          echo "Lambda Authorizer export found."
+
+          echo "Authorizer ARN: $EXPORT_VALUE"
+
+
+      # ======================================================
+      # DEPLOY PRODUCT API
+      # ======================================================
+
+      - name: Deploy Product API
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Deploying CloudMart Product API"
+
+          echo "=============================================="
+
+
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+
+          echo ""
+
+          echo "Product API deployment completed successfully."
+
+
+      # ======================================================
+      # DISPLAY CLOUDFORMATION OUTPUTS
+      # ======================================================
+
+      - name: Display Product API Stack Outputs
+
+        run: |
+
+          echo "=============================================="
+
+          echo "Product API Stack Outputs"
+
+          echo "=============================================="
+
+
+          aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --query 'Stacks[0].Outputs' \
+            --output table
+
+
+      # ======================================================
+      # VERIFY PRODUCT LAMBDA
+      # ======================================================
+
+      - name: Verify Product Lambda
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Verifying Product API Lambda"
+
+          echo "=============================================="
+
+
+          aws lambda get-function \
+            --function-name CloudMart-Product-API-dev \
+            --region "$AWS_REGION"
+
+
+          echo ""
+
+          echo "Product API Lambda verified successfully."
+
+
+      # ======================================================
+      # VERIFY API GATEWAY
+      # ======================================================
+
+      - name: Verify Product API Gateway
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Verifying Product API Gateway"
+
+          echo "=============================================="
+
+
+          API_ID=$(
+
+            aws apigateway get-rest-apis \
+              --region "$AWS_REGION" \
+              --query "items[?name=='CloudMart-Product-API-dev'].id | [0]" \
+              --output text
+
+          )
+
+
+          if [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+
+            echo "ERROR: Product API Gateway was not found."
+
+            exit 1
+
+          fi
+
+
+          echo "Product API Gateway found."
+
+          echo "API ID: $API_ID"
+
+
+          API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/dev"
+
+
+          echo ""
+
+          echo "Product API URL:"
+
+          echo "$API_URL"
+
+
+      # ======================================================
+      # TEST PRODUCT API WITHOUT TOKEN
+      # ======================================================
+
+      - name: Test Product API Without Authorization
+
+        shell: bash
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Testing Product API without Authorization"
+
+          echo "Expected: HTTP 401/403"
+
+          echo "=============================================="
+
+
+          API_ID=$(
+
+            aws apigateway get-rest-apis \
+              --region "$AWS_REGION" \
+              --query "items[?name=='CloudMart-Product-API-dev'].id | [0]" \
+              --output text
+
+          )
+
+
+          API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/dev/products"
+
+
+          HTTP_CODE=$(
+
+            curl \
+              --silent \
+              --output /tmp/product-response.json \
+              --write-out "%{http_code}" \
+              "$API_URL"
+
+          )
+
+
+          echo "HTTP status: $HTTP_CODE"
+
+          echo "Response:"
+
+          cat /tmp/product-response.json
+
+          echo ""
+
+
+          if [ "$HTTP_CODE" != "401" ] && [ "$HTTP_CODE" != "403" ]; then
+
+            echo "ERROR: Unauthorized request was not rejected."
+
+            exit 1
+
+          fi
+
+
+          echo "Unauthorized request correctly rejected."
+
+
+      # ======================================================
+      # TEST PRODUCT API WITH INVALID TOKEN
+      # ======================================================
+
+      - name: Test Product API With Invalid Token
+
+        shell: bash
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Testing Product API with invalid token"
+
+          echo "Expected: HTTP 401/403"
+
+          echo "=============================================="
+
+
+          API_ID=$(
+
+            aws apigateway get-rest-apis \
+              --region "$AWS_REGION" \
+              --query "items[?name=='CloudMart-Product-API-dev'].id | [0]" \
+              --output text
+
+          )
+
+
+          API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/dev/products"
+
+
+          HTTP_CODE=$(
+
+            curl \
+              --silent \
+              --output /tmp/product-invalid-token.json \
+              --write-out "%{http_code}" \
+              -H "Authorization: Bearer invalid-token" \
+              "$API_URL"
+
+          )
+
+
+          echo "HTTP status: $HTTP_CODE"
+
+          echo "Response:"
+
+          cat /tmp/product-invalid-token.json
+
+          echo ""
+
+
+          if [ "$HTTP_CODE" != "401" ] && [ "$HTTP_CODE" != "403" ]; then
+
+            echo "ERROR: Invalid token was not rejected."
+
+            exit 1
+
+          fi
+
+
+          echo "Invalid token correctly rejected."
+
+
+      # ======================================================
+      # TEST PRODUCT API WITH VALID TOKEN
+      # ======================================================
+
+      - name: Test Product API With Valid Token
+
+        shell: bash
+
+        run: |
+
+          set -e
+
+          echo "=============================================="
+
+          echo "Testing Product API with valid token"
+
+          echo "=============================================="
+
+
+          API_ID=$(
+
+            aws apigateway get-rest-apis \
+              --region "$AWS_REGION" \
+              --query "items[?name=='CloudMart-Product-API-dev'].id | [0]" \
+              --output text
+
+          )
+
+
+          API_URL="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/dev/products"
+
+
+          # Development token currently configured by the IAM stack.
+
+          AUTH_TOKEN="${AUTH_TOKEN:-test-token-12345}"
+
+
+          HTTP_CODE=$(
+
+            curl \
+              --silent \
+              --output /tmp/product-valid-token.json \
+              --write-out "%{http_code}" \
+              -H "Authorization: Bearer ${AUTH_TOKEN}" \
+              "$API_URL"
+
+          )
+
+
+          echo "HTTP status: $HTTP_CODE"
+
+          echo "Response:"
+
+          cat /tmp/product-valid-token.json
+
+          echo ""
+
+
+          if [ "$HTTP_CODE" -ge 500 ]; then
+
+            echo "ERROR: Product API returned a server error."
+
+            exit 1
+
+          fi
+
+
+          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+
+            echo "ERROR: Valid authorization token was rejected."
+
+            exit 1
+
+          fi
+
+
+          echo "Valid authorization token was accepted."
+
+
+      # ======================================================
+      # DEPLOYMENT SUCCESS
+      # ======================================================
+
+      - name: Deployment Successful
+
+        run: |
+
+          echo ""
+
+          echo "===================================================="
+
+          echo "      CLOUDMART PRODUCT API DEPLOYMENT SUCCESS"
+
+          echo "===================================================="
+
+          echo ""
+
+          echo "Product Lambda:"
+
+          echo "CloudMart-Product-API-dev"
+
+          echo ""
+
+          echo "Product API routes:"
+
+          echo "GET    /products"
+
+          echo "POST   /products"
+
+          echo "GET    /products/{productId}"
+
+          echo "PUT    /products/{productId}"
+
+          echo "DELETE /products/{productId}"
+
+          echo ""
+
+          echo "Authentication:"
+
+          echo "Lambda Authorizer"
+
+          echo ""
+
+          echo "Database:"
+
+          echo "RDS MySQL"
+
+          echo ""
+
+          echo "===================================================="
