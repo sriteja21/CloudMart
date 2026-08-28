@@ -79,7 +79,8 @@ Resources:
 
     Properties:
 
-      CidrBlock: !Ref VpcCidr
+      CidrBlock:
+        !Ref VpcCidr
 
       EnableDnsSupport: true
 
@@ -104,15 +105,18 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
-      CidrBlock: !Ref PublicSubnetCidr
+      CidrBlock:
+        !Ref PublicSubnetCidr
 
       MapPublicIpOnLaunch: true
 
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      AvailabilityZone:
+        !Select
+          - 0
+          - !GetAZs ''
 
       Tags:
 
@@ -133,15 +137,18 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
-      CidrBlock: !Ref PrivateSubnetCidr
+      CidrBlock:
+        !Ref PrivateSubnetCidr
 
       MapPublicIpOnLaunch: false
 
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      AvailabilityZone:
+        !Select
+          - 0
+          - !GetAZs ''
 
       Tags:
 
@@ -162,15 +169,18 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
-      CidrBlock: !Ref PrivateSubnet2Cidr
+      CidrBlock:
+        !Ref PrivateSubnet2Cidr
 
       MapPublicIpOnLaunch: false
 
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ''
+      AvailabilityZone:
+        !Select
+          - 1
+          - !GetAZs ''
 
       Tags:
 
@@ -210,9 +220,11 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId:
+        !Ref InternetGateway
 
 
   # ========================================================
@@ -225,7 +237,8 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       Tags:
 
@@ -244,15 +257,19 @@ Resources:
 
     Type: AWS::EC2::Route
 
-    DependsOn: VPCGatewayAttachment
+    DependsOn:
+      - VPCGatewayAttachment
 
     Properties:
 
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId:
+        !Ref PublicRouteTable
 
-      DestinationCidrBlock: 0.0.0.0/0
+      DestinationCidrBlock:
+        0.0.0.0/0
 
-      GatewayId: !Ref InternetGateway
+      GatewayId:
+        !Ref InternetGateway
 
 
   # ========================================================
@@ -265,9 +282,11 @@ Resources:
 
     Properties:
 
-      SubnetId: !Ref PublicSubnet
+      SubnetId:
+        !Ref PublicSubnet
 
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId:
+        !Ref PublicRouteTable
 
 
   # ========================================================
@@ -280,7 +299,8 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       Tags:
 
@@ -301,9 +321,11 @@ Resources:
 
     Properties:
 
-      SubnetId: !Ref PrivateSubnet
+      SubnetId:
+        !Ref PrivateSubnet
 
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId:
+        !Ref PrivateRouteTable
 
 
   # ========================================================
@@ -316,9 +338,11 @@ Resources:
 
     Properties:
 
-      SubnetId: !Ref PrivateSubnet2
+      SubnetId:
+        !Ref PrivateSubnet2
 
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId:
+        !Ref PrivateRouteTable
 
 
   # ========================================================
@@ -331,9 +355,11 @@ Resources:
 
     Properties:
 
-      GroupDescription: Security group for CloudMart Flask Dashboard
+      GroupDescription:
+        Security group for CloudMart Flask Dashboard
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       SecurityGroupIngress:
 
@@ -353,7 +379,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref AdminIp
+          CidrIp:
+            !Ref AdminIp
 
       SecurityGroupEgress:
 
@@ -373,23 +400,17 @@ Resources:
   # LAMBDA SECURITY GROUP
   # ========================================================
 
-    LambdaSecurityGroup:
+  LambdaSecurityGroup:
 
     Type: AWS::EC2::SecurityGroup
 
     Properties:
 
-      GroupDescription: Security group for CloudMart Lambda functions
+      GroupDescription:
+        Security group for CloudMart Lambda functions
 
-      VpcId: !Ref CloudMartVPC
-
-      SecurityGroupIngress:
-
-        # Allow Lambda to access the SSM Interface Endpoint
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      VpcId:
+        !Ref CloudMartVPC
 
       SecurityGroupEgress:
 
@@ -404,6 +425,10 @@ Resources:
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: dev
+
+
   # ========================================================
   # RDS SECURITY GROUP
   # ========================================================
@@ -414,9 +439,11 @@ Resources:
 
     Properties:
 
-      GroupDescription: Security group for CloudMart RDS MySQL
+      GroupDescription:
+        Security group for CloudMart RDS MySQL
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       SecurityGroupEgress:
 
@@ -431,6 +458,9 @@ Resources:
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: dev
+
 
   # ========================================================
   # LAMBDA -> RDS MYSQL
@@ -442,7 +472,8 @@ Resources:
 
     Properties:
 
-      GroupId: !Ref RDSSecurityGroup
+      GroupId:
+        !Ref RDSSecurityGroup
 
       IpProtocol: tcp
 
@@ -450,7 +481,50 @@ Resources:
 
       ToPort: 3306
 
-      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      SourceSecurityGroupId:
+        !Ref LambdaSecurityGroup
+
+
+  # ========================================================
+  # SSM ENDPOINT SECURITY GROUP
+  # ========================================================
+
+  SSMEndpointSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription:
+        Security group for CloudMart SSM VPC Endpoint
+
+      VpcId:
+        !Ref CloudMartVPC
+
+      SecurityGroupIngress:
+
+        # Allow Lambda to access SSM over HTTPS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId:
+            !Ref LambdaSecurityGroup
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: CloudMart-SSM-Endpoint-SG
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: dev
 
 
   # ========================================================
@@ -463,11 +537,13 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       VpcEndpointType: Interface
 
-      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.ssm
 
       PrivateDnsEnabled: true
 
@@ -478,7 +554,7 @@ Resources:
 
       SecurityGroupIds:
 
-        - !Ref LambdaSecurityGroup
+        - !Ref SSMEndpointSecurityGroup
 
       Tags:
 
@@ -487,6 +563,9 @@ Resources:
 
         - Key: Project
           Value: CloudMart
+
+        - Key: Environment
+          Value: dev
 
 
   # ========================================================
@@ -499,11 +578,13 @@ Resources:
 
     Properties:
 
-      VpcId: !Ref CloudMartVPC
+      VpcId:
+        !Ref CloudMartVPC
 
       VpcEndpointType: Gateway
 
-      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.s3
 
       RouteTableIds:
 
@@ -516,6 +597,9 @@ Resources:
 
         - Key: Project
           Value: CloudMart
+
+        - Key: Environment
+          Value: dev
 
 
 # ==========================================================
@@ -531,12 +615,15 @@ Outputs:
 
   VPCId:
 
-    Description: CloudMart VPC ID
+    Description:
+      CloudMart VPC ID
 
-    Value: !Ref CloudMartVPC
+    Value:
+      !Ref CloudMartVPC
 
     Export:
-      Name: CloudMart-VPC-ID
+      Name:
+        CloudMart-VPC-ID
 
 
   # --------------------------------------------------------
@@ -545,12 +632,15 @@ Outputs:
 
   PublicSubnetId:
 
-    Description: CloudMart Public Subnet ID
+    Description:
+      CloudMart Public Subnet ID
 
-    Value: !Ref PublicSubnet
+    Value:
+      !Ref PublicSubnet
 
     Export:
-      Name: CloudMart-Public-Subnet-ID
+      Name:
+        CloudMart-Public-Subnet-ID
 
 
   # --------------------------------------------------------
@@ -559,12 +649,15 @@ Outputs:
 
   PrivateSubnetId:
 
-    Description: CloudMart Private Subnet 1 ID
+    Description:
+      CloudMart Private Subnet 1 ID
 
-    Value: !Ref PrivateSubnet
+    Value:
+      !Ref PrivateSubnet
 
     Export:
-      Name: CloudMart-Private-Subnet-ID
+      Name:
+        CloudMart-Private-Subnet-ID
 
 
   # --------------------------------------------------------
@@ -573,12 +666,15 @@ Outputs:
 
   PrivateSubnet2Id:
 
-    Description: CloudMart Private Subnet 2 ID
+    Description:
+      CloudMart Private Subnet 2 ID
 
-    Value: !Ref PrivateSubnet2
+    Value:
+      !Ref PrivateSubnet2
 
     Export:
-      Name: CloudMart-Private-Subnet-2-ID
+      Name:
+        CloudMart-Private-Subnet-2-ID
 
 
   # --------------------------------------------------------
@@ -587,12 +683,15 @@ Outputs:
 
   PublicRouteTableId:
 
-    Description: CloudMart Public Route Table ID
+    Description:
+      CloudMart Public Route Table ID
 
-    Value: !Ref PublicRouteTable
+    Value:
+      !Ref PublicRouteTable
 
     Export:
-      Name: CloudMart-Public-RouteTable-ID
+      Name:
+        CloudMart-Public-RouteTable-ID
 
 
   # --------------------------------------------------------
@@ -600,10 +699,16 @@ Outputs:
   # --------------------------------------------------------
 
   PrivateRouteTableId:
-    Description: CloudMart Private Route Table ID
-    Value: !Ref PrivateRouteTable
+
+    Description:
+      CloudMart Private Route Table ID
+
+    Value:
+      !Ref PrivateRouteTable
+
     Export:
-      Name: CloudMart-Private-RouteTable-ID
+      Name:
+        CloudMart-Private-RouteTable-ID
 
 
   # --------------------------------------------------------
@@ -612,12 +717,15 @@ Outputs:
 
   EC2SecurityGroupId:
 
-    Description: CloudMart EC2 Security Group ID
+    Description:
+      CloudMart EC2 Security Group ID
 
-    Value: !Ref EC2SecurityGroup
+    Value:
+      !Ref EC2SecurityGroup
 
     Export:
-      Name: CloudMart-EC2-SG-ID
+      Name:
+        CloudMart-EC2-SG-ID
 
 
   # --------------------------------------------------------
@@ -626,12 +734,15 @@ Outputs:
 
   LambdaSecurityGroupId:
 
-    Description: CloudMart Lambda Security Group ID
+    Description:
+      CloudMart Lambda Security Group ID
 
-    Value: !Ref LambdaSecurityGroup
+    Value:
+      !Ref LambdaSecurityGroup
 
     Export:
-      Name: CloudMart-Lambda-SG-ID
+      Name:
+        CloudMart-Lambda-SG-ID
 
 
   # --------------------------------------------------------
@@ -640,12 +751,15 @@ Outputs:
 
   RDSSecurityGroupId:
 
-    Description: CloudMart RDS Security Group ID
+    Description:
+      CloudMart RDS Security Group ID
 
-    Value: !Ref RDSSecurityGroup
+    Value:
+      !Ref RDSSecurityGroup
 
     Export:
-      Name: CloudMart-RDS-SG-ID
+      Name:
+        CloudMart-RDS-SG-ID
 
 
   # --------------------------------------------------------
@@ -654,12 +768,15 @@ Outputs:
 
   SSMEndpointId:
 
-    Description: CloudMart SSM VPC Endpoint ID
+    Description:
+      CloudMart SSM VPC Endpoint ID
 
-    Value: !Ref SSMEndpoint
+    Value:
+      !Ref SSMEndpoint
 
     Export:
-      Name: CloudMart-SSM-Endpoint-ID
+      Name:
+        CloudMart-SSM-Endpoint-ID
 
 
   # --------------------------------------------------------
@@ -668,9 +785,12 @@ Outputs:
 
   S3EndpointId:
 
-    Description: CloudMart S3 VPC Endpoint ID
+    Description:
+      CloudMart S3 VPC Endpoint ID
 
-    Value: !Ref S3Endpoint
+    Value:
+      !Ref S3Endpoint
 
     Export:
-      Name: CloudMart-S3-Endpoint-ID
+      Name:
+        CloudMart-S3-Endpoint-ID
