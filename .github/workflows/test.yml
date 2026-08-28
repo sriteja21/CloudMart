@@ -1,0 +1,73 @@
+name: Test and Deploy Event Driven Stack
+
+on:
+  push:
+    branches:
+      - event-driven
+
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+  STACK_NAME: cloudmart-event-driven
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+
+  deploy:
+
+    name: Deploy Event Driven Stack
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy
+        run: |
+          set -e
+
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/event-driven-stack.yml \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --parameter-overrides \
+              Environment=dev \
+              LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
+            --no-fail-on-empty-changeset
+
+          echo "Event-driven stack deployed."
+
+      - name: Verify
+        run: |
+          set -e
+
+          TOPIC=$(aws cloudformation list-exports \
+            --region "$AWS_REGION" \
+            --query "Exports[?Name=='CloudMart-dev-LowStockTopicArn'].Value | [0]" \
+            --output text)
+
+          BUS=$(aws cloudformation list-exports \
+            --region "$AWS_REGION" \
+            --query "Exports[?Name=='CloudMart-dev-EventBusName'].Value | [0]" \
+            --output text)
+
+          test -n "$TOPIC"
+          test "$TOPIC" != "None"
+
+          test -n "$BUS"
+          test "$BUS" != "None"
+
+          echo "SNS: OK"
+          echo "EventBridge: OK"
