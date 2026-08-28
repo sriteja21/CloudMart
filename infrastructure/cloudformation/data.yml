@@ -9,34 +9,16 @@ Description: CloudMart Database Stack - Free Tier Development Configuration
 
 Parameters:
 
-  # --------------------------------------------------------
-  # DATABASE NAME
-  # --------------------------------------------------------
-
   DBName:
     Type: String
     Default: cloudmart
     Description: CloudMart database name
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-
-  # --------------------------------------------------------
-  # RDS INSTANCE CLASS
-  #
-  # Free Tier / Development assumption
-  # --------------------------------------------------------
-
   DBInstanceClass:
     Type: String
     Default: db.t3.micro
     Description: RDS MySQL instance class for development
-
-
-  # --------------------------------------------------------
-  # DATABASE STORAGE
-  #
-  # 20 GB development configuration
-  # --------------------------------------------------------
 
   DBAllocatedStorage:
     Type: Number
@@ -62,7 +44,7 @@ Resources:
 
     Properties:
 
-      Description: "CloudMart RDS MySQL database credentials"
+      Description: CloudMart RDS MySQL database credentials
 
       GenerateSecretString:
 
@@ -87,12 +69,7 @@ Resources:
 
 
   # ========================================================
-  # RDS DB SUBNET GROUP
-  #
-  # Created and managed by CloudFormation.
-  #
-  # Uses the two private subnets created by network.yml.
-  # The two subnets are in different Availability Zones.
+  # RDS SUBNET GROUP
   # ========================================================
 
   CloudMartDBSubnetGroup:
@@ -101,7 +78,7 @@ Resources:
 
     Properties:
 
-      DBSubnetGroupDescription: "CloudMart RDS private subnet group"
+      DBSubnetGroupDescription: CloudMart RDS private subnet group
 
       SubnetIds:
 
@@ -122,17 +99,12 @@ Resources:
 
 
   # ========================================================
-  # RDS MYSQL DATABASE
+  # RDS MYSQL
   # ========================================================
 
   CloudMartDatabase:
 
     Type: AWS::RDS::DBInstance
-
-    # ------------------------------------------------------
-    # CloudFormation keeps a final snapshot if the
-    # database resource is deleted.
-    # ------------------------------------------------------
 
     DeletionPolicy: Snapshot
 
@@ -140,26 +112,11 @@ Resources:
 
     Properties:
 
-
-      # ====================================================
-      # DATABASE ENGINE
-      # ====================================================
-
       Engine: mysql
 
       EngineVersion: '8.0.46'
 
-
-      # ====================================================
-      # DATABASE NAME
-      # ====================================================
-
       DBName: !Ref DBName
-
-
-      # ====================================================
-      # DATABASE CREDENTIALS
-      # ====================================================
 
       MasterUsername:
 
@@ -169,7 +126,6 @@ Resources:
 
           - SecretArn: !Ref CloudMartDatabaseSecret
 
-
       MasterUserPassword:
 
         Fn::Sub:
@@ -178,76 +134,28 @@ Resources:
 
           - SecretArn: !Ref CloudMartDatabaseSecret
 
-
-      # ====================================================
-      # INSTANCE CONFIGURATION
-      # ====================================================
-
       DBInstanceClass: !Ref DBInstanceClass
 
       AllocatedStorage: !Ref DBAllocatedStorage
 
       StorageType: gp3
 
-
-      # ====================================================
-      # CLOUDFORMATION-MANAGED DB SUBNET GROUP
-      # ====================================================
-
       DBSubnetGroupName:
-
         Ref: CloudMartDBSubnetGroup
-
-
-      # ====================================================
-      # RDS SECURITY GROUP
-      #
-      # Imported from network.yml
-      # ====================================================
 
       VPCSecurityGroups:
 
         - Fn::ImportValue: CloudMart-RDS-SG-ID
 
-
-      # ====================================================
-      # PRIVATE DATABASE
-      # ====================================================
-
       PubliclyAccessible: false
-
-
-      # ====================================================
-      # BACKUP CONFIGURATION
-      #
-      # Free Tier / Development assumption:
-      # automated backups disabled.
-      # ====================================================
 
       BackupRetentionPeriod: 0
 
       CopyTagsToSnapshot: true
 
-
-      # ====================================================
-      # STORAGE ENCRYPTION
-      # ====================================================
-
       StorageEncrypted: true
 
-
-      # ====================================================
-      # DELETION PROTECTION
-      #
-      # Disabled for development.
-      # ====================================================
-
       DeletionProtection: false
-
-
-      # ====================================================
-      # TAGS
-      # ====================================================
 
       Tags:
 
@@ -271,10 +179,6 @@ Resources:
 Outputs:
 
 
-  # --------------------------------------------------------
-  # DATABASE IDENTIFIER
-  # --------------------------------------------------------
-
   DatabaseIdentifier:
 
     Description: CloudMart RDS database identifier
@@ -285,16 +189,11 @@ Outputs:
       Name: CloudMart-DatabaseIdentifier
 
 
-  # --------------------------------------------------------
-  # DATABASE ENDPOINT
-  # --------------------------------------------------------
-
   DatabaseEndpoint:
 
     Description: CloudMart RDS endpoint
 
     Value:
-
       Fn::GetAtt:
         - CloudMartDatabase
         - Endpoint.Address
@@ -303,16 +202,11 @@ Outputs:
       Name: CloudMart-DatabaseEndpoint
 
 
-  # --------------------------------------------------------
-  # DATABASE PORT
-  # --------------------------------------------------------
-
   DatabasePort:
 
     Description: CloudMart RDS MySQL port
 
     Value:
-
       Fn::GetAtt:
         - CloudMartDatabase
         - Endpoint.Port
@@ -320,10 +214,6 @@ Outputs:
     Export:
       Name: CloudMart-DatabasePort
 
-
-  # --------------------------------------------------------
-  # DATABASE NAME
-  # --------------------------------------------------------
 
   DatabaseName:
 
@@ -335,10 +225,6 @@ Outputs:
       Name: CloudMart-DatabaseName
 
 
-  # --------------------------------------------------------
-  # DATABASE SECRET ARN
-  # --------------------------------------------------------
-
   DatabaseSecretArn:
 
     Description: CloudMart database secret ARN
@@ -348,10 +234,6 @@ Outputs:
     Export:
       Name: CloudMart-DatabaseSecretArn
 
-
-  # --------------------------------------------------------
-  # DATABASE SUBNET GROUP
-  # --------------------------------------------------------
 
   DatabaseSubnetGroup:
 

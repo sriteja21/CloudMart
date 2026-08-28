@@ -12,12 +12,23 @@ Description: CloudMart Authentication Stack
 Parameters:
 
   Environment:
+
     Type: String
+
     Default: dev
+
     AllowedValues:
       - dev
       - prod
+
     Description: Deployment environment
+
+  LambdaAuthorizerRoleArn:
+
+    Type: String
+
+    Description:
+      ARN of the Lambda Authorizer IAM role created by the IAM stack
 
 
 # ==========================================================
@@ -26,9 +37,6 @@ Parameters:
 
 Resources:
 
-  # ========================================================
-  # LAMBDA AUTHORIZER
-  # ========================================================
 
   LambdaAuthorizer:
 
@@ -45,22 +53,12 @@ Resources:
 
       CodeUri: ../../src/authorizer/
 
-      # ====================================================
-      # IAM ROLE
-      # Import role created by IAM stack
-      # ====================================================
-
       Role:
-        Fn::ImportValue:
-          !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+        !Ref LambdaAuthorizerRoleArn
 
       MemorySize: 128
 
       Timeout: 10
-
-      # ====================================================
-      # ENVIRONMENT VARIABLES
-      # ====================================================
 
       Environment:
 
@@ -69,23 +67,23 @@ Resources:
           ENVIRONMENT:
             !Ref Environment
 
+
       # ====================================================
-      # NO VPC CONFIGURATION
-      #
-      # The Authorizer does not need to access RDS.
-      # API Gateway can invoke it without VPC configuration.
+      # NO VPC
       # ====================================================
+
+      # The authorizer only needs to read the
+      # authentication token from SSM.
+
 
       Tags:
 
-        Project:
-          CloudMart
+        Project: CloudMart
 
         Environment:
           !Ref Environment
 
-        Component:
-          Authentication
+        Component: Authentication
 
 
 # ==========================================================
@@ -94,9 +92,6 @@ Resources:
 
 Outputs:
 
-  # ========================================================
-  # LAMBDA AUTHORIZE ARN
-  # ========================================================
 
   LambdaAuthorizerArn:
 
@@ -111,10 +106,6 @@ Outputs:
       Name:
         !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
 
-
-  # ========================================================
-  # LAMBDA AUTHORIZE NAME
-  # ========================================================
 
   LambdaAuthorizerName:
 

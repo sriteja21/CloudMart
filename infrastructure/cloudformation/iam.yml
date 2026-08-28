@@ -10,57 +10,36 @@ Description: CloudMart IAM and SSM Parameter Store Stack
 Parameters:
 
   Environment:
+
     Type: String
+
     Default: dev
+
     AllowedValues:
       - dev
       - prod
+
     Description: Deployment environment
 
 
   AuthToken:
+
     Type: String
+
     Default: test-token-12345
+
     NoEcho: true
-    Description: Test authorization token
 
-
-  DatabaseHost:
-    Type: String
-    Default: test-db.example.com
-    Description: Test RDS database endpoint
-
-
-  DatabasePort:
-    Type: String
-    Default: '3306'
-    Description: RDS database port
-
-
-  DatabaseName:
-    Type: String
-    Default: cloudmart
-    Description: Test database name
-
-
-  DatabaseUsername:
-    Type: String
-    Default: admin
-    NoEcho: true
-    Description: Test database username
-
-
-  DatabasePassword:
-    Type: String
-    Default: TestPassword123!
-    NoEcho: true
-    Description: Test database password
+    Description: Authorization token for development
 
 
   ReportS3BucketName:
+
     Type: String
+
     Default: cloudmart-dev-reports-test
-    Description: Test S3 bucket for daily reports
+
+    Description: S3 bucket used for daily reports
 
 
 # ==========================================================
@@ -71,12 +50,8 @@ Resources:
 
 
   # ========================================================
-  # SSM PARAMETERS
+  # AUTH TOKEN
   # ========================================================
-
-  # --------------------------------------------------------
-  # AUTHORIZATION TOKEN
-  # --------------------------------------------------------
 
   AuthTokenParameter:
 
@@ -96,9 +71,9 @@ Resources:
         Authorization token for Lambda Authorizer
 
 
-  # --------------------------------------------------------
+  # ========================================================
   # DATABASE HOST
-  # --------------------------------------------------------
+  # ========================================================
 
   DatabaseHostParameter:
 
@@ -112,15 +87,15 @@ Resources:
       Type: String
 
       Value:
-        !Ref DatabaseHost
+        Fn::ImportValue: CloudMart-DatabaseEndpoint
 
       Description:
-        RDS database host
+        RDS database endpoint
 
 
-  # --------------------------------------------------------
+  # ========================================================
   # DATABASE PORT
-  # --------------------------------------------------------
+  # ========================================================
 
   DatabasePortParameter:
 
@@ -134,15 +109,15 @@ Resources:
       Type: String
 
       Value:
-        !Ref DatabasePort
+        Fn::ImportValue: CloudMart-DatabasePort
 
       Description:
         RDS database port
 
 
-  # --------------------------------------------------------
+  # ========================================================
   # DATABASE NAME
-  # --------------------------------------------------------
+  # ========================================================
 
   DatabaseNameParameter:
 
@@ -156,59 +131,15 @@ Resources:
       Type: String
 
       Value:
-        !Ref DatabaseName
+        Fn::ImportValue: CloudMart-DatabaseName
 
       Description:
-        RDS database name
+        CloudMart database name
 
 
-  # --------------------------------------------------------
-  # DATABASE USERNAME
-  # --------------------------------------------------------
-
-  DatabaseUsernameParameter:
-
-    Type: AWS::SSM::Parameter
-
-    Properties:
-
-      Name:
-        !Sub /app/${Environment}/database/username
-
-      Type: String
-
-      Value:
-        !Ref DatabaseUsername
-
-      Description:
-        RDS database username
-
-
-  # --------------------------------------------------------
-  # DATABASE PASSWORD
-  # --------------------------------------------------------
-
-  DatabasePasswordParameter:
-
-    Type: AWS::SSM::Parameter
-
-    Properties:
-
-      Name:
-        !Sub /app/${Environment}/database/password
-
-      Type: String
-
-      Value:
-        !Ref DatabasePassword
-
-      Description:
-        RDS database password
-
-
-  # --------------------------------------------------------
-  # REPORT S3 BUCKET
-  # --------------------------------------------------------
+  # ========================================================
+  # REPORT BUCKET
+  # ========================================================
 
   ReportS3BucketParameter:
 
@@ -229,7 +160,7 @@ Resources:
 
 
   # ========================================================
-  # PRODUCT AND ORDER LAMBDA EXECUTION ROLE
+  # PRODUCT / ORDER LAMBDA ROLE
   # ========================================================
 
   LambdaExecutionRole:
@@ -240,11 +171,6 @@ Resources:
 
       RoleName:
         !Sub CloudMart-Lambda-Execution-Role-${Environment}
-
-
-      # ----------------------------------------------------
-      # Lambda assumes this role
-      # ----------------------------------------------------
 
       AssumeRolePolicyDocument:
 
@@ -262,10 +188,6 @@ Resources:
             Action:
               - sts:AssumeRole
 
-
-      # ----------------------------------------------------
-      # Permissions
-      # ----------------------------------------------------
 
       Policies:
 
@@ -294,10 +216,10 @@ Resources:
 
 
         # ==================================================
-        # DATABASE CONFIGURATION FROM SSM
+        # SSM DATABASE CONFIGURATION
         # ==================================================
 
-        - PolicyName: LambdaDatabaseAccess
+        - PolicyName: LambdaDatabaseSSMAccess
 
           PolicyDocument:
 
@@ -318,7 +240,30 @@ Resources:
 
 
         # ==================================================
-        # EVENTBRIDGE ACCESS
+        # SECRETS MANAGER
+        # ==================================================
+
+        - PolicyName: LambdaDatabaseSecretAccess
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+
+                  - secretsmanager:GetSecretValue
+
+                Resource:
+
+                  Fn::ImportValue: CloudMart-DatabaseSecretArn
+
+
+        # ==================================================
+        # EVENTBRIDGE
         # ==================================================
 
         - PolicyName: LambdaEventBridgeAccess
@@ -339,10 +284,7 @@ Resources:
 
 
         # ==================================================
-        # VPC ACCESS
-        #
-        # Product / Order Lambdas that connect to RDS
-        # need these permissions.
+        # VPC NETWORK INTERFACES
         # ==================================================
 
         - PolicyName: LambdaVPCAccess
@@ -379,11 +321,6 @@ Resources:
       RoleName:
         !Sub CloudMart-Lambda-Authorizer-Role-${Environment}
 
-
-      # ----------------------------------------------------
-      # Lambda assumes this role
-      # ----------------------------------------------------
-
       AssumeRolePolicyDocument:
 
         Version: '2012-10-17'
@@ -401,19 +338,11 @@ Resources:
               - sts:AssumeRole
 
 
-      # ----------------------------------------------------
-      # Authorizer permissions
-      #
-      # IMPORTANT:
-      # No VPC/EC2 permissions are required because
-      # the Lambda Authorizer is NOT inside the VPC.
-      # ----------------------------------------------------
-
       Policies:
 
 
         # ==================================================
-        # CLOUDWATCH LOGS
+        # CLOUDWATCH
         # ==================================================
 
         - PolicyName: AuthorizerCloudWatchLogs
@@ -436,7 +365,7 @@ Resources:
 
 
         # ==================================================
-        # SSM AUTHORIZATION TOKEN ACCESS
+        # AUTH TOKEN
         # ==================================================
 
         - PolicyName: AuthorizerSSMAccess
@@ -472,11 +401,6 @@ Resources:
       RoleName:
         !Sub CloudMart-CloudFormation-Execution-Role-${Environment}
 
-
-      # ----------------------------------------------------
-      # CloudFormation assumes this role
-      # ----------------------------------------------------
-
       AssumeRolePolicyDocument:
 
         Version: '2012-10-17'
@@ -493,10 +417,6 @@ Resources:
             Action:
               - sts:AssumeRole
 
-
-      # ----------------------------------------------------
-      # CloudFormation deployment permissions
-      # ----------------------------------------------------
 
       Policies:
 
@@ -523,6 +443,7 @@ Resources:
                   - s3:*
                   - events:*
                   - sns:*
+                  - secretsmanager:*
 
                 Resource: '*'
 
@@ -534,10 +455,6 @@ Resources:
 Outputs:
 
 
-  # ========================================================
-  # PRODUCT / ORDER LAMBDA ROLE ARN
-  # ========================================================
-
   LambdaExecutionRoleArn:
 
     Description:
@@ -547,14 +464,9 @@ Outputs:
       !GetAtt LambdaExecutionRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-
-  # ========================================================
-  # LAMBDA AUTHORIZER ROLE ARN
-  # ========================================================
 
   LambdaAuthorizerRoleArn:
 
@@ -565,14 +477,9 @@ Outputs:
       !GetAtt LambdaAuthorizerRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
 
-
-  # ========================================================
-  # CLOUDFORMATION EXECUTION ROLE ARN
-  # ========================================================
 
   CloudFormationExecutionRoleArn:
 
@@ -583,14 +490,9 @@ Outputs:
       !GetAtt CloudFormationExecutionRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-CloudFormationExecutionRoleArn-${Environment}
 
-
-  # ========================================================
-  # REPORT S3 BUCKET PARAMETER NAME
-  # ========================================================
 
   ReportS3BucketParameterName:
 
@@ -601,6 +503,5 @@ Outputs:
       !Sub /app/${Environment}/s3/report-bucket
 
     Export:
-
       Name:
         !Sub CloudMart-ReportS3BucketParameter-${Environment}
