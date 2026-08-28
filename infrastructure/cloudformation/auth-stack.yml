@@ -23,13 +23,6 @@ Parameters:
 
     Description: Deployment environment
 
-  LambdaAuthorizerRoleArn:
-
-    Type: String
-
-    Description:
-      ARN of the Lambda Authorizer IAM role created by the IAM stack
-
 
 # ==========================================================
 # RESOURCES
@@ -37,6 +30,10 @@ Parameters:
 
 Resources:
 
+
+  # ========================================================
+  # LAMBDA AUTHORIZER
+  # ========================================================
 
   LambdaAuthorizer:
 
@@ -53,12 +50,31 @@ Resources:
 
       CodeUri: ../../src/authorizer/
 
-      Role:
-        !Ref LambdaAuthorizerRoleArn
-
       MemorySize: 128
 
       Timeout: 10
+
+
+      # ====================================================
+      # IAM ROLE
+      # ====================================================
+      #
+      # Automatically imports the role created by
+      # the IAM stack.
+      #
+      # No manual parameter is required.
+      #
+
+      Role:
+
+        Fn::ImportValue:
+
+          !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+
+
+      # ====================================================
+      # ENVIRONMENT
+      # ====================================================
 
       Environment:
 
@@ -69,12 +85,8 @@ Resources:
 
 
       # ====================================================
-      # NO VPC
+      # TAGS
       # ====================================================
-
-      # The authorizer only needs to read the
-      # authentication token from SSM.
-
 
       Tags:
 
@@ -93,6 +105,10 @@ Resources:
 Outputs:
 
 
+  # --------------------------------------------------------
+  # AUTHORIZER ARN
+  # --------------------------------------------------------
+
   LambdaAuthorizerArn:
 
     Description:
@@ -106,6 +122,10 @@ Outputs:
       Name:
         !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
 
+
+  # --------------------------------------------------------
+  # AUTHORIZER NAME
+  # --------------------------------------------------------
 
   LambdaAuthorizerName:
 
