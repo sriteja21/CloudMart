@@ -389,7 +389,15 @@ def update_product(event):
                         int(data.get("reorder_threshold", 10))
                     )
                 )
+        quantity = int(data.get("quantity_available", 0))
+        threshold = int(data.get("reorder_threshold", 10))
 
+        if "quantity_available" in data:
+            publish_inventory_event(
+                pid,
+                quantity,
+                threshold
+            )
         conn.commit()
 
         return response(
@@ -495,3 +503,21 @@ def lambda_handler(event, context):
                 "error": str(e)
             }
         )
+def publish_inventory_event(product_id, quantity, threshold):
+    if quantity >= threshold:
+        return
+
+    events.put_events(
+        Entries=[
+            {
+                "EventBusName": EVENT_BUS,
+                "Source": "cloudmart.product",
+                "DetailType": "Low Stock Alert",
+                "Detail": json.dumps({
+                    "product_id": product_id,
+                    "quantity_available": quantity,
+                    "reorder_threshold": threshold
+                })
+            }
+        ]
+    )
