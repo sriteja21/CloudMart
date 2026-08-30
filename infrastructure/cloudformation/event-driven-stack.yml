@@ -19,54 +19,87 @@ Resources:
 
   LowStockTopic:
     Type: AWS::SNS::Topic
+
     Properties:
-      TopicName: !Sub cloudmart-${Environment}-low-stock-alerts
-      DisplayName: !Sub CloudMart ${Environment} Low Stock Alerts
+      TopicName:
+        !Sub cloudmart-${Environment}-low-stock-alerts
+
+      DisplayName:
+        !Sub CloudMart ${Environment} Low Stock Alerts
+
+      Tags:
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
 
 
   LowStockEmailSubscription:
     Type: AWS::SNS::Subscription
+
     Properties:
-      TopicArn: !Ref LowStockTopic
+      TopicArn:
+        !Ref LowStockTopic
+
       Protocol: email
-      Endpoint: !Ref LowStockEmail
+
+      Endpoint:
+        !Ref LowStockEmail
 
 
   CloudMartEventBus:
     Type: AWS::Events::EventBus
+
     Properties:
-      Name: !Sub cloudmart-${Environment}-event-bus
+      Name:
+        !Sub cloudmart-${Environment}-event-bus
 
 
   LowStockEventRule:
     Type: AWS::Events::Rule
+
     Properties:
-      Name: !Sub cloudmart-${Environment}-low-stock-rule
-      EventBusName: !Ref CloudMartEventBus
+      Name:
+        !Sub cloudmart-${Environment}-low-stock-rule
+
+      EventBusName:
+        !Ref CloudMartEventBus
+
       State: ENABLED
 
       EventPattern:
+
         source:
           - cloudmart.product
+
         detail-type:
           - Low Stock Alert
 
       Targets:
+
         - Id: LowStockSNSTarget
-          Arn: !Ref LowStockTopic
+
+          Arn:
+            !Ref LowStockTopic
 
 
   LowStockSNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
+
     Properties:
+
       Topics:
         - !Ref LowStockTopic
 
       PolicyDocument:
+
         Version: '2012-10-17'
 
         Statement:
+
           - Sid: AllowEventBridgePublish
+
             Effect: Allow
 
             Principal:
@@ -83,18 +116,33 @@ Resources:
 Outputs:
 
   LowStockTopicArn:
-    Value: !Ref LowStockTopic
+    Description: Low stock SNS topic ARN
+
+    Value:
+      !Ref LowStockTopic
+
     Export:
-      Name: !Sub CloudMart-${Environment}-LowStockTopicArn
+      Name:
+        !Sub CloudMart-${Environment}-LowStockTopicArn
 
 
   CloudMartEventBusArn:
-    Value: !GetAtt CloudMartEventBus.Arn
+    Description: CloudMart EventBridge event bus ARN
+
+    Value:
+      !GetAtt CloudMartEventBus.Arn
+
     Export:
-      Name: !Sub CloudMart-${Environment}-EventBusArn
+      Name:
+        !Sub CloudMart-${Environment}-EventBusArn
 
 
   CloudMartEventBusName:
-    Value: !Ref CloudMartEventBus
+    Description: CloudMart EventBridge event bus name
+
+    Value:
+      !Ref CloudMartEventBus
+
     Export:
-      Name: !Sub CloudMart-${Environment}-EventBusName
+      Name:
+        !Sub CloudMart-${Environment}-EventBusName

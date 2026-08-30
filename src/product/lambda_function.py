@@ -10,7 +10,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ssm = boto3.client("ssm")
-
+events = boto3.client("event")
 ENV = os.getenv("ENVIRONMENT", "dev")
 SCHEMA = os.path.join(os.path.dirname(__file__), "schema.sql")
 
