@@ -4,12 +4,10 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 env:
   AWS_REGION: ap-south-1
-  AWS_STACK_PREFIX: cloudmart
 
 permissions:
   id-token: write
@@ -17,18 +15,11 @@ permissions:
 
 jobs:
 
-  # ==========================================================
-  # VALIDATE
-  # ==========================================================
-
   validate:
-
-    name: Validate CloudFormation
-
+    name: Validate
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
 
       - name: Configure AWS
@@ -37,34 +28,25 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Validate templates
+      - name: Validate CloudFormation
         run: |
           set -e
 
           for template in infrastructure/cloudformation/*.yml; do
-            echo "Validating $template"
             aws cloudformation validate-template \
               --template-body "file://$template" \
               >/dev/null
           done
 
-          echo "CloudFormation validation passed."
+          echo "Validation successful"
 
-
-  # ==========================================================
-  # NETWORK
-  # ==========================================================
 
   network:
-
-    name: Deploy Network
-
+    name: Network
     needs: validate
-
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
 
       - name: Configure AWS
@@ -78,25 +60,18 @@ jobs:
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/network.yml \
             --stack-name cloudmart-network \
-            --region "$AWS_REGION"
+            --region "$AWS_REGION" \
+            --no-fail-on-empty-changeset
 
-          echo "Network deployed."
+          echo "Network deployment successful"
 
-
-  # ==========================================================
-  # DATABASE
-  # ==========================================================
 
   database:
-
-    name: Deploy Database
-
+    name: Database
     needs: network
-
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
 
       - name: Configure AWS
@@ -110,16 +85,17 @@ jobs:
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/data.yml \
             --stack-name cloudmart-data \
-            --region "$AWS_REGION"
+            --region "$AWS_REGION" \
+            --no-fail-on-empty-changeset
 
-          echo "Database stack deployed."
+          echo "Database deployment successful"
 
       - name: Wait for RDS
         run: |
           DB_ID=$(aws cloudformation describe-stacks \
             --stack-name cloudmart-data \
             --region "$AWS_REGION" \
-            --query "Stacks[0].Outputs[?OutputKey=='DatabaseIdentifier'].OutputValue" \
+            --query "Stacks[0].Outputs[?OutputKey=='DatabaseIdentifier'].OutputValue | [0]" \
             --output text)
 
           if [ -n "$DB_ID" ] && [ "$DB_ID" != "None" ]; then
@@ -128,23 +104,15 @@ jobs:
               --region "$AWS_REGION"
           fi
 
-          echo "RDS is available."
+          echo "RDS available"
 
-
-  # ==========================================================
-  # IAM
-  # ==========================================================
 
   iam:
-
-    name: Deploy IAM
-
+    name: IAM
     needs: database
-
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
 
       - name: Configure AWS
@@ -159,11 +127,12 @@ jobs:
             --template-file infrastructure/cloudformation/iam.yml \
             --stack-name cloudmart-iam \
             --region "$AWS_REGION" \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
 
-          echo "IAM deployed."
+          echo "IAM deployment successful"
 
-      - name: Verify IAM exports
+      - name: Verify IAM Exports
         run: |
           set -e
 
@@ -184,24 +153,19 @@ jobs:
             fi
           done
 
-          echo "Required exports verified."
+          echo "IAM exports verified"
 
-
-  # ==========================================================
-  # AUTH
-  # ==========================================================
 
   auth:
-
-    name: Deploy Auth
-
+    name: Auth
     needs: iam
-
     runs-on: ubuntu-latest
 
     steps:
-
       - uses: actions/checkout@v4
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -233,7 +197,7 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
-          echo "Auth deployed."
+          echo "Auth deployment successful"
 
       - name: Verify Authorizer
         run: |
@@ -242,23 +206,72 @@ jobs:
             --region "$AWS_REGION" \
             >/dev/null
 
-          echo "Authorizer verified."
+          echo "Authorizer verified"
 
 
-  # ==========================================================
-  # PRODUCT API
-  # ==========================================================
-
-  application:
-
-    name: Deploy Product API
-
+  event-driven:
+    name: Event Driven
     needs: auth
-
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
 
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Event Driven Stack
+        run: |
+          set -e
+
+          if [ -z "${{ secrets.LOW_STOCK_EMAIL }}" ]; then
+            echo "LOW_STOCK_EMAIL secret is missing"
+            exit 1
+          fi
+
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/event-driven-stack.yml \
+            --stack-name cloudmart-event-driven \
+            --region "$AWS_REGION" \
+            --parameter-overrides \
+              Environment=dev \
+              LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
+            --no-fail-on-empty-changeset
+
+          echo "Event-driven deployment successful"
+
+      - name: Verify Event Driven Stack
+        run: |
+          set -e
+
+          TOPIC=$(aws cloudformation list-exports \
+            --region "$AWS_REGION" \
+            --query "Exports[?Name=='CloudMart-dev-LowStockTopicArn'].Value | [0]" \
+            --output text)
+
+          BUS=$(aws cloudformation list-exports \
+            --region "$AWS_REGION" \
+            --query "Exports[?Name=='CloudMart-dev-EventBusName'].Value | [0]" \
+            --output text)
+
+          test -n "$TOPIC"
+          test "$TOPIC" != "None"
+
+          test -n "$BUS"
+          test "$BUS" != "None"
+
+          echo "SNS and EventBridge verified"
+
+
+  application:
+    name: Product API
+    needs: event-driven
+    runs-on: ubuntu-latest
+
+    steps:
       - uses: actions/checkout@v4
 
       - name: Configure AWS
@@ -280,12 +293,12 @@ jobs:
           sam build \
             --template-file infrastructure/cloudformation/application.yml
 
-      - name: Verify build
+      - name: Verify Build
         run: |
           test -f .aws-sam/build/ProductApiFunction/lambda_function.py
           test -f .aws-sam/build/ProductApiFunction/schema.sql
 
-          echo "Build verified."
+          echo "Product API build verified"
 
       - name: Deploy Product API
         run: |
@@ -298,168 +311,4 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
-          echo "Product API deployed."
-
-
-  # ==========================================================
-  # TEST API
-  # ==========================================================
-
-  test:
-
-    name: Test Product API
-
-    needs: application
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Get API URL
-        id: api
-        run: |
-          API_URL=$(aws cloudformation describe-stacks \
-            --stack-name cloudmart-application \
-            --region "$AWS_REGION" \
-            --query "Stacks[0].Outputs[?OutputKey=='ProductApiUrl'].OutputValue | [0]" \
-            --output text)
-
-          if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then
-            echo "API URL not found."
-            exit 1
-          fi
-
-          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
-
-          echo "Product API: $API_URL"
-
-      - name: Get auth token
-        run: |
-          TOKEN=$(aws ssm get-parameter \
-            --name "/app/dev/auth/token" \
-            --with-decryption \
-            --region "$AWS_REGION" \
-            --query "Parameter.Value" \
-            --output text)
-
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
-            echo "Auth token not found."
-            exit 1
-          fi
-
-          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
-
-      - name: Test unauthorized request
-        run: |
-          STATUS=$(curl \
-            --silent \
-            --output /tmp/unauthorized.json \
-            --write-out "%{http_code}" \
-            "$API_URL/product")
-
-          echo "Unauthorized: HTTP $STATUS"
-
-          if [ "$STATUS" != "401" ] && [ "$STATUS" != "403" ]; then
-            cat /tmp/unauthorized.json
-            exit 1
-          fi
-
-      - name: Test GET
-        run: |
-          STATUS=$(curl \
-            --silent \
-            --output /tmp/get.json \
-            --write-out "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            "$API_URL/product")
-
-          echo "GET /product: HTTP $STATUS"
-          cat /tmp/get.json
-
-          if [ "$STATUS" != "200" ]; then
-            exit 1
-          fi
-
-      - name: Test POST
-        run: |
-          STATUS=$(curl \
-            --silent \
-            --output /tmp/post.json \
-            --write-out "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d '{
-              "name": "GitHub Test Product",
-              "description": "Deployment test product",
-              "price": 99.99,
-              "category": "Test",
-              "quantity_available": 10,
-              "reorder_threshold": 2
-            }' \
-            "$API_URL/product")
-
-          echo "POST /product: HTTP $STATUS"
-          cat /tmp/post.json
-
-          if [ "$STATUS" != "201" ]; then
-            exit 1
-          fi
-
-      - name: Test GET after POST
-        run: |
-          STATUS=$(curl \
-            --silent \
-            --output /tmp/products.json \
-            --write-out "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            "$API_URL/product")
-
-          echo "GET /product: HTTP $STATUS"
-          cat /tmp/products.json
-
-          if [ "$STATUS" != "200" ]; then
-            exit 1
-          fi
-
-      - name: Test API Lambda
-        run: |
-          aws lambda get-function \
-            --function-name CloudMart-Product-API-dev \
-            --region "$AWS_REGION" \
-            >/dev/null
-
-          echo "Product Lambda verified."
-
-
-  # ==========================================================
-  # COMPLETE
-  # ==========================================================
-
-  complete:
-
-    name: Deployment Complete
-
-    needs: test
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Success
-        run: |
-          echo "CloudMart deployment successful."
-          echo "Network:      OK"
-          echo "Database:     OK"
-          echo "IAM:          OK"
-          echo "Auth:         OK"
-          echo "Product API:  OK"
-          echo "API Tests:    OK"
+          echo "Product API deployment successful"

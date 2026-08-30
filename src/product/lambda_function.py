@@ -8,10 +8,10 @@ import pymysql
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
 ssm = boto3.client("ssm")
-events = boto3.client("event")
+events = boto3.client("events")
 ENV = os.getenv("ENVIRONMENT", "dev")
+EVENT_BUS = f"cloudmart-{ENV}-event-bus"
 SCHEMA = os.path.join(os.path.dirname(__file__), "schema.sql")
 
 PARAMS = {
