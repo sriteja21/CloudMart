@@ -2,218 +2,203 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Transform: AWS::Serverless-2016-10-31
 
-Description: CloudMart Product API
-
-
-# ==========================================================
-# PARAMETERS
-# ==========================================================
+Description: CloudMart Product and Order API
 
 Parameters:
 
   Environment:
-
     Type: String
-
     Default: dev
-
     AllowedValues:
       - dev
       - prod
 
-    Description: Deployment environment
-
-
-# ==========================================================
-# RESOURCES
-# ==========================================================
-
 Resources:
 
-
-  # ========================================================
-  # PRODUCT LAMBDA
-  # ========================================================
-
   ProductApiFunction:
-
     Type: AWS::Serverless::Function
-
     Properties:
-
       FunctionName:
         !Sub CloudMart-Product-API-${Environment}
 
       Runtime: python3.12
-
       Handler: lambda_function.lambda_handler
-
       CodeUri: ../../src/product/
-
       MemorySize: 256
-
       Timeout: 30
 
       Role:
-
         Fn::ImportValue:
           !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-
-      # ====================================================
-      # VPC
-      # ====================================================
-
       VpcConfig:
-
         SecurityGroupIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Lambda-SG-ID
 
         SubnetIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-ID
 
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-2-ID
 
-
-      # ====================================================
-      # ENVIRONMENT VARIABLES
-      # ====================================================
-
       Environment:
-
         Variables:
-
           ENVIRONMENT:
             !Ref Environment
 
           DATABASE_SECRET_ARN:
-
             Fn::ImportValue:
               CloudMart-DatabaseSecretArn
 
-
-      # ====================================================
-      # API EVENTS
-      # ====================================================
-
       Events:
 
-
         GetProducts:
-
           Type: Api
-
           Properties:
-
             RestApiId:
               !Ref ProductApi
-
             Path: /product
-
             Method: GET
-
 
         CreateProduct:
-
           Type: Api
-
           Properties:
-
             RestApiId:
               !Ref ProductApi
-
             Path: /product
-
             Method: POST
 
-
         GetProduct:
-
           Type: Api
-
           Properties:
-
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: GET
 
-
         UpdateProduct:
-
           Type: Api
-
           Properties:
-
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: PUT
 
-
         DeleteProduct:
-
           Type: Api
-
           Properties:
-
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: DELETE
 
 
-  # ========================================================
-  # API GATEWAY
-  # ========================================================
+  OrderApiFunction:
+    Type: AWS::Serverless::Function
+
+    Properties:
+      FunctionName:
+        !Sub CloudMart-Order-API-${Environment}
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      CodeUri: ../../src/order/
+
+      MemorySize: 256
+
+      Timeout: 30
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-2-ID
+
+      Environment:
+        Variables:
+          ENVIRONMENT:
+            !Ref Environment
+
+          DATABASE_SECRET_ARN:
+            Fn::ImportValue:
+              CloudMart-DatabaseSecretArn
+
+      Events:
+
+        CreateOrder:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order
+            Method: POST
+
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order
+            Method: GET
+
+        GetOrder:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order/{id}
+            Method: GET
+
+        UpdateOrder:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order/{id}
+            Method: PUT
+
+        DeleteOrder:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order/{id}
+            Method: DELETE
+
 
   ProductApi:
-
     Type: AWS::Serverless::Api
 
     Properties:
-
       Name:
-        !Sub CloudMart-Product-API-${Environment}
+        !Sub CloudMart-Product-Order-API-${Environment}
 
       StageName:
         !Ref Environment
 
       EndpointConfiguration:
-
         Type: REGIONAL
 
-
-      # ====================================================
-      # CORS
-      # ====================================================
-
       Cors:
-
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-
         AllowHeaders: "'Content-Type,Authorization'"
-
         AllowOrigin: "'*'"
 
-
-      # ====================================================
-      # AUTHORIZER
-      # ====================================================
-
       Auth:
-
         DefaultAuthorizer: CloudMartAuthorizer
 
         Authorizers:
@@ -221,64 +206,69 @@ Resources:
           CloudMartAuthorizer:
 
             FunctionArn:
-
               Fn::ImportValue:
                 !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
 
             FunctionPayloadType: REQUEST
 
             Identity:
-
               Headers:
                 - Authorization
 
             AuthorizerResultTtlInSeconds: 0
 
 
-# ==========================================================
-# OUTPUTS
-# ==========================================================
-
 Outputs:
 
-
   ProductApiUrl:
-
-    Description:
-      CloudMart Product API URL
+    Description: CloudMart Product and Order API URL
 
     Value:
-
       !Sub
         - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-
         - ApiId:
             !Ref ProductApi
 
 
   ProductApiFunctionArn:
-
-    Description:
-      CloudMart Product Lambda ARN
+    Description: CloudMart Product Lambda ARN
 
     Value:
       !GetAtt ProductApiFunction.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
 
 
   ProductApiFunctionName:
-
-    Description:
-      CloudMart Product Lambda name
+    Description: CloudMart Product Lambda name
 
     Value:
       !Ref ProductApiFunction
 
     Export:
-
       Name:
         !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
+
+
+  OrderApiFunctionArn:
+    Description: CloudMart Order Lambda ARN
+
+    Value:
+      !GetAtt OrderApiFunction.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
+
+
+  OrderApiFunctionName:
+    Description: CloudMart Order Lambda name
+
+    Value:
+      !Ref OrderApiFunction
+
+    Export:
+      Name:
+        !Sub CloudMart-Order-Api-Lambda-Name-${Environment}
