@@ -1,4 +1,4 @@
-name: Deploy Product Order Stack
+name: Deploy Application Stack
 
 on:
   workflow_dispatch:
@@ -18,17 +18,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: Install SAM
+      - name: Setup SAM
         uses: aws-actions/setup-sam@v2
 
       - name: Build
-        run: sam build -t infrastructure/cloudformation/product-api.yml
+        run: sam build -t infrastructure/cloudformation/application.yml
 
       - name: Deploy
         run: |
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
-            --stack-name cloudmart-product-api \
+            --stack-name cloudmart-application \
             --region ap-south-1 \
             --capabilities CAPABILITY_IAM \
             --no-confirm-changeset \
