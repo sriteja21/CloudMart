@@ -3,7 +3,7 @@ name: Deploy Application Stack
 on:
   push:
     branches:
-      - main
+      - order-api
   workflow_dispatch:
 
 permissions:
