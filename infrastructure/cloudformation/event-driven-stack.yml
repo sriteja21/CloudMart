@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Event Driven Low Stock Alert Stack
+Description: CloudMart Event Driven Notification Stack
 
 Parameters:
 
@@ -14,43 +14,62 @@ Parameters:
   LowStockEmail:
     Type: String
 
+  OrderNotificationEmail:
+    Type: String
+
 
 Resources:
 
   LowStockTopic:
     Type: AWS::SNS::Topic
-
     Properties:
       TopicName:
         !Sub cloudmart-${Environment}-low-stock-alerts
-
       DisplayName:
         !Sub CloudMart ${Environment} Low Stock Alerts
-
       Tags:
         - Key: Project
           Value: CloudMart
-
         - Key: Environment
           Value: !Ref Environment
 
 
   LowStockEmailSubscription:
     Type: AWS::SNS::Subscription
-
     Properties:
       TopicArn:
         !Ref LowStockTopic
-
       Protocol: email
-
       Endpoint:
         !Ref LowStockEmail
 
 
+  OrderNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        !Sub cloudmart-${Environment}-order-notifications
+      DisplayName:
+        !Sub CloudMart ${Environment} Order Notifications
+      Tags:
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  OrderNotificationEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        !Ref OrderNotificationTopic
+      Protocol: email
+      Endpoint:
+        !Ref OrderNotificationEmail
+
+
   CloudMartEventBus:
     Type: AWS::Events::EventBus
-
     Properties:
       Name:
         !Sub cloudmart-${Environment}-event-bus
@@ -58,80 +77,109 @@ Resources:
 
   LowStockEventRule:
     Type: AWS::Events::Rule
-
     Properties:
       Name:
         !Sub cloudmart-${Environment}-low-stock-rule
-
       EventBusName:
         !Ref CloudMartEventBus
-
       State: ENABLED
-
       EventPattern:
-
         source:
           - cloudmart.product
-
         detail-type:
           - Low Stock Alert
-
       Targets:
-
         - Id: LowStockSNSTarget
-
           Arn:
             !Ref LowStockTopic
 
 
+  OrderEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name:
+        !Sub cloudmart-${Environment}-order-rule
+      EventBusName:
+        !Ref CloudMartEventBus
+      State: ENABLED
+      EventPattern:
+        source:
+          - cloudmart.order
+        detail-type:
+          - Order Created
+          - Order Confirmed
+          - Order Shipped
+          - Order Delivered
+          - Order Cancelled
+          - Order Failed
+      Targets:
+        - Id: OrderSNSTarget
+          Arn:
+            !Ref OrderNotificationTopic
+
+
   LowStockSNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
-
     Properties:
-
       Topics:
         - !Ref LowStockTopic
-
       PolicyDocument:
-
         Version: '2012-10-17'
-
         Statement:
-
           - Sid: AllowEventBridgePublish
-
             Effect: Allow
-
             Principal:
               Service:
                 - events.amazonaws.com
-
             Action:
               - sns:Publish
-
             Resource:
               !Ref LowStockTopic
+
+
+  OrderNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref OrderNotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - sns:Publish
+            Resource:
+              !Ref OrderNotificationTopic
 
 
 Outputs:
 
   LowStockTopicArn:
     Description: Low stock SNS topic ARN
-
     Value:
       !Ref LowStockTopic
-
     Export:
       Name:
         !Sub CloudMart-${Environment}-LowStockTopicArn
 
 
+  OrderNotificationTopicArn:
+    Description: Order notification SNS topic ARN
+    Value:
+      !Ref OrderNotificationTopic
+    Export:
+      Name:
+        !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+
+
   CloudMartEventBusArn:
     Description: CloudMart EventBridge event bus ARN
-
     Value:
       !GetAtt CloudMartEventBus.Arn
-
     Export:
       Name:
         !Sub CloudMart-${Environment}-EventBusArn
@@ -139,10 +187,8 @@ Outputs:
 
   CloudMartEventBusName:
     Description: CloudMart EventBridge event bus name
-
     Value:
       !Ref CloudMartEventBus
-
     Export:
       Name:
         !Sub CloudMart-${Environment}-EventBusName

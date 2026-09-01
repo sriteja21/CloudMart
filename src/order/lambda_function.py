@@ -10,8 +10,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ssm = boto3.client("ssm")
+events = boto3.client("events")
 
 ENV = os.getenv("ENVIRONMENT", "dev")
+EVENT_BUS = f"cloudmart-{ENV}-event-bus"
+
 _connection = None
 
 
@@ -92,13 +95,29 @@ def id_from_path(event, name):
     return int(value)
 
 
+def publish_event(event_type, detail):
+    result = events.put_events(
+        Entries=[
+            {
+                "EventBusName": EVENT_BUS,
+                "Source": "cloudmart.order",
+                "DetailType": event_type,
+                "Detail": json.dumps(detail, default=str)
+            }
+        ]
+    )
+
+    if result.get("FailedEntryCount", 0) > 0:
+        logger.error("EventBridge failed: %s", result)
+
+    return result
+
+
 def create_customer(event):
     data = body(event)
 
     if not data.get("email") or not data.get("name"):
         raise ValueError("email and name are required.")
-
-    token_hash = data.get("token_hash", "")
 
     conn = db()
 
@@ -113,7 +132,7 @@ def create_customer(event):
                 (
                     data["email"].strip(),
                     data["name"].strip(),
-                    token_hash
+                    data.get("token_hash", "")
                 )
             )
 
@@ -147,12 +166,8 @@ def list_customers(event):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
-                customer_id,
-                email,
-                name,
-                created_at,
-                updated_at
+            SELECT customer_id, email, name,
+                   created_at, updated_at
             FROM customers
             ORDER BY customer_id
             """
@@ -171,12 +186,8 @@ def get_customer(event):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
-                customer_id,
-                email,
-                name,
-                created_at,
-                updated_at
+            SELECT customer_id, email, name,
+                   created_at, updated_at
             FROM customers
             WHERE customer_id=%s
             """,
@@ -201,9 +212,6 @@ def update_customer(event):
     customer_id = id_from_path(event, "Customer")
     data = body(event)
 
-    if not data:
-        raise ValueError("Request body cannot be empty.")
-
     fields = []
     values = []
 
@@ -223,7 +231,6 @@ def update_customer(event):
         raise ValueError("No fields to update.")
 
     values.append(customer_id)
-
     conn = db()
 
     try:
@@ -306,8 +313,7 @@ def delete_customer(event):
         conn.rollback()
         return response(
             409,
-            {
-                "message": "Customer cannot be deleted because orders exist."
+            {"message": "Customer has existing orders."
             }
         )
 
@@ -333,14 +339,16 @@ def create_order(event):
 
             cur.execute(
                 """
-                SELECT customer_id
+                SELECT customer_id, name, email
                 FROM customers
                 WHERE customer_id=%s
                 """,
                 (customer_id,)
             )
 
-            if not cur.fetchone():
+            customer = cur.fetchone()
+
+            if not customer:
                 return response(
                     404,
                     {"message": "Customer not found."}
@@ -355,25 +363,38 @@ def create_order(event):
                 (customer_id,)
             )
 
-            oid = cur.lastrowid
-            order_number = f"ORD-{oid:06d}"
+            order_id = cur.lastrowid
+            order_number = f"ORD-{order_id:06d}"
             total = Decimal("0.00")
+            order_items = []
 
             for item in data["items"]:
+
+                if "product_id" not in item or "quantity" not in item:
+                    raise ValueError(
+                        "Each item requires product_id and quantity."
+                    )
+
                 product_id = int(item["product_id"])
                 quantity = int(item["quantity"])
 
                 if quantity <= 0:
-                    raise ValueError("Quantity must be greater than 0.")
+                    raise ValueError(
+                        "Quantity must be greater than 0."
+                    )
 
                 cur.execute(
                     """
-                    SELECT p.price, i.quantity_available
+                    SELECT
+                        p.product_id,
+                        p.name,
+                        p.price,
+                        i.quantity_available
                     FROM products p
                     JOIN inventory i
-                    ON p.product_id=i.product_id
+                      ON p.product_id=i.product_id
                     WHERE p.product_id=%s
-                    AND p.is_active=TRUE
+                      AND p.is_active=TRUE
                     FOR UPDATE
                     """,
                     (product_id,)
@@ -390,11 +411,12 @@ def create_order(event):
 
                 if quantity > available:
                     raise ValueError(
-                        f"Insufficient stock for product {product_id}."
+                        f"Insufficient stock for "
+                        f"{product['name']}."
                     )
 
-                price = Decimal(str(product["price"]))
-                item_total = price * quantity
+                unit_price = Decimal(str(product["price"]))
+                item_total = unit_price * quantity
                 total += item_total
 
                 cur.execute(
@@ -405,10 +427,10 @@ def create_order(event):
                     VALUES (%s,%s,%s,%s,%s)
                     """,
                     (
-                        oid,
+                        order_id,
                         product_id,
                         quantity,
-                        price,
+                        unit_price,
                         item_total
                     )
                 )
@@ -420,7 +442,20 @@ def create_order(event):
                         quantity_available - %s
                     WHERE product_id=%s
                     """,
-                    (quantity, product_id)
+                    (
+                        quantity,
+                        product_id
+                    )
+                )
+
+                order_items.append(
+                    {
+                        "product_id": product_id,
+                        "product_name": product["name"],
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "total_price": item_total
+                    }
                 )
 
             cur.execute(
@@ -430,7 +465,11 @@ def create_order(event):
                     total_amount=%s
                 WHERE order_id=%s
                 """,
-                (order_number, total, oid)
+                (
+                    order_number,
+                    total,
+                    order_id
+                )
             )
 
             cur.execute(
@@ -441,29 +480,66 @@ def create_order(event):
                 VALUES (%s,%s,%s,%s,%s)
                 """,
                 (
-                    oid,
+                    order_id,
                     "CREATED",
                     None,
                     "PENDING",
-                    "Order created"
+                    "Order created successfully"
                 )
             )
 
         conn.commit()
 
+        publish_event(
+            "Order Created",
+            {
+                "order_id": order_id,
+                "order_number": order_number,
+                "customer": {
+                    "customer_id": customer["customer_id"],
+                    "name": customer["name"],
+                    "email": customer["email"]
+                },
+                "status": "PENDING",
+                "items": order_items,
+                "total_amount": total,
+                "message": (
+                    f"Hello {customer['name']}, "
+                    f"your order {order_number} has "
+                    f"been created successfully."
+                )
+            }
+        )
+
         return response(
             201,
             {
                 "message": "Order created successfully.",
-                "order_id": oid,
+                "order_id": order_id,
                 "order_number": order_number,
                 "status": "PENDING",
-                "total_amount": total
+                "total_amount": total,
+                "items": order_items
             }
         )
 
-    except Exception:
+    except Exception as e:
         conn.rollback()
+
+        try:
+            publish_event(
+                "Order Failed",
+                {
+                    "customer_id": customer_id,
+                    "status": "FAILED",
+                    "message": str(e)
+                }
+            )
+        except Exception:
+            logger.exception(
+                "Failed to publish Order Failed event"
+            )
+
         raise
 
 
@@ -473,8 +549,14 @@ def list_order(event):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT order_id, customer_id, order_number,
-                   status, total_amount, created_at, updated_at
+            SELECT
+                order_id,
+                customer_id,
+                order_number,
+                status,
+                total_amount,
+                created_at,
+                updated_at
             FROM orders
             ORDER BY order_id
             """
@@ -487,18 +569,29 @@ def list_order(event):
 
 
 def get_order(event):
-    oid = id_from_path(event, "Order")
+    order_id = id_from_path(event, "Order")
     conn = db()
 
     with conn.cursor() as cur:
+
         cur.execute(
             """
-            SELECT order_id, customer_id, order_number,
-                   status, total_amount, created_at, updated_at
-            FROM orders
-            WHERE order_id=%s
+            SELECT
+                o.order_id,
+                o.customer_id,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                o.order_number,
+                o.status,
+                o.total_amount,
+                o.created_at,
+                o.updated_at
+            FROM orders o
+            JOIN customers c
+              ON o.customer_id=c.customer_id
+            WHERE o.order_id=%s
             """,
-            (oid,)
+            (order_id,)
         )
 
         order = cur.fetchone()
@@ -511,26 +604,38 @@ def get_order(event):
 
         cur.execute(
             """
-            SELECT order_item_id, product_id, quantity,
-                   unit_price, total_price
-            FROM order_items
-            WHERE order_id=%s
-            ORDER BY order_item_id
+            SELECT
+                oi.order_item_id,
+                oi.product_id,
+                p.name AS product_name,
+                oi.quantity,
+                oi.unit_price,
+                oi.total_price
+            FROM order_items oi
+            JOIN products p
+              ON oi.product_id=p.product_id
+            WHERE oi.order_id=%s
+            ORDER BY oi.order_item_id
             """,
-            (oid,)
+            (order_id,)
         )
 
         order["items"] = cur.fetchall()
 
         cur.execute(
             """
-            SELECT log_id, event_type, old_status,
-                   new_status, message, created_at
+            SELECT
+                log_id,
+                event_type,
+                old_status,
+                new_status,
+                message,
+                created_at
             FROM order_logs
             WHERE order_id=%s
             ORDER BY log_id
             """,
-            (oid,)
+            (order_id,)
         )
 
         order["logs"] = cur.fetchall()
@@ -542,24 +647,33 @@ def get_order(event):
 
 
 def update_order(event):
-    oid = id_from_path(event, "Order")
+    order_id = id_from_path(event, "Order")
     data = body(event)
 
     if not data.get("status"):
         raise ValueError("status is required.")
 
+    new_status = data["status"].strip().upper()
     conn = db()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute(
                 """
-                SELECT status
-                FROM orders
-                WHERE order_id=%s
+                SELECT
+                    o.status,
+                    o.order_number,
+                    o.customer_id,
+                    c.name,
+                    c.email
+                FROM orders o
+                JOIN customers c
+                  ON o.customer_id=c.customer_id
+                WHERE o.order_id=%s
                 FOR UPDATE
                 """,
-                (oid,)
+                (order_id,)
             )
 
             order = cur.fetchone()
@@ -571,7 +685,6 @@ def update_order(event):
                 )
 
             old_status = order["status"]
-            new_status = data["status"].strip()
 
             cur.execute(
                 """
@@ -579,7 +692,10 @@ def update_order(event):
                 SET status=%s
                 WHERE order_id=%s
                 """,
-                (new_status, oid)
+                (
+                    new_status,
+                    order_id
+                )
             )
 
             cur.execute(
@@ -590,7 +706,7 @@ def update_order(event):
                 VALUES (%s,%s,%s,%s,%s)
                 """,
                 (
-                    oid,
+                    order_id,
                     "STATUS_CHANGED",
                     old_status,
                     new_status,
@@ -601,11 +717,32 @@ def update_order(event):
 
         conn.commit()
 
+        publish_event(
+            f"Order {new_status.title()}",
+            {
+                "order_id": order_id,
+                "order_number": order["order_number"],
+                "customer": {
+                    "customer_id": order["customer_id"],
+                    "name": order["name"],
+                    "email": order["email"]
+                },
+                "previous_status": old_status,
+                "status": new_status,
+                "message": (
+                    f"Hello {order['name']}, "
+                    f"your order {order['order_number']} "
+                    f"is now {new_status}."
+                )
+            }
+        )
+
         return response(
             200,
             {
                 "message": "Order updated successfully.",
-                "order_id": oid,
+                "order_id": order_id,
+                "order_number": order["order_number"],
                 "status": new_status
             }
         )
@@ -616,19 +753,27 @@ def update_order(event):
 
 
 def delete_order(event):
-    oid = id_from_path(event, "Order")
+    order_id = id_from_path(event, "Order")
     conn = db()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute(
                 """
-                SELECT status
-                FROM orders
-                WHERE order_id=%s
+                SELECT
+                    o.status,
+                    o.order_number,
+                    o.customer_id,
+                    c.name,
+                    c.email
+                FROM orders o
+                JOIN customers c
+                  ON o.customer_id=c.customer_id
+                WHERE o.order_id=%s
                 FOR UPDATE
                 """,
-                (oid,)
+                (order_id,)
             )
 
             order = cur.fetchone()
@@ -639,13 +784,15 @@ def delete_order(event):
                     {"message": "Order not found."}
                 )
 
+            old_status = order["status"]
+
             cur.execute(
                 """
                 UPDATE orders
                 SET status='CANCELLED'
                 WHERE order_id=%s
                 """,
-                (oid,)
+                (order_id,)
             )
 
             cur.execute(
@@ -656,9 +803,9 @@ def delete_order(event):
                 VALUES (%s,%s,%s,%s,%s)
                 """,
                 (
-                    oid,
+                    order_id,
                     "CANCELLED",
-                    order["status"],
+                    old_status,
                     "CANCELLED",
                     "Order cancelled"
                 )
@@ -666,11 +813,32 @@ def delete_order(event):
 
         conn.commit()
 
+        publish_event(
+            "Order Cancelled",
+            {
+                "order_id": order_id,
+                "order_number": order["order_number"],
+                "customer": {
+                    "customer_id": order["customer_id"],
+                    "name": order["name"],
+                    "email": order["email"]
+                },
+                "previous_status": old_status,
+                "status": "CANCELLED",
+                "message": (
+                    f"Hello {order['name']}, "
+                    f"your order {order['order_number']} "
+                    f"has been cancelled."
+                )
+            }
+        )
+
         return response(
             200,
             {
                 "message": "Order cancelled successfully.",
-                "order_id": oid,
+                "order_id": order_id,
+                "order_number": order["order_number"],
                 "status": "CANCELLED"
             }
         )
@@ -724,10 +892,14 @@ def lambda_handler(event, context):
         )
 
     except ValueError as e:
-        return response(400, {"message": str(e)})
+        return response(
+            400,
+            {"message": str(e)}
+        )
 
     except pymysql.MySQLError as e:
         logger.exception("Database error")
+
         return response(
             500,
             {
@@ -738,6 +910,7 @@ def lambda_handler(event, context):
 
     except Exception as e:
         logger.exception("API error")
+
         return response(
             500,
             {

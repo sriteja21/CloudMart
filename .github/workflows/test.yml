@@ -1,4 +1,4 @@
-name: Deploy Application Stack
+name: Deploy CloudMart
 
 on:
   push:
@@ -27,19 +27,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup SAM
-        uses: aws-actions/setup-sam@v2
-
-      - name: Build
-        run: sam build -t infrastructure/cloudformation/application.yml
-
-      - name: Deploy
+      - name: Deploy Application
         run: |
-          sam deploy \
-            --template-file .aws-sam/build/template.yaml \
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/application.yml \
             --stack-name cloudmart-application \
             --region $AWS_REGION \
-            --resolve-s3 \
             --capabilities CAPABILITY_IAM \
-            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      - name: Deploy Event Driven
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/event-driven-stack.yml \
+            --stack-name cloudmart-event-driven \
+            --region $AWS_REGION \
+            --parameter-overrides \
+              Environment=dev \
+              LowStockEmail=sriteja.a2103@gmail.com \
+              OrderNotificationEmail=sriteja.a2103@gmail.com \
             --no-fail-on-empty-changeset
