@@ -12,7 +12,6 @@ logger.setLevel(logging.INFO)
 ssm = boto3.client("ssm")
 
 ENV = os.getenv("ENVIRONMENT", "dev")
-
 _connection = None
 
 
@@ -39,10 +38,7 @@ def db():
         WithDecryption=True
     )["Parameters"]
 
-    p = {
-        x["Name"].split("/")[-1]: x["Value"]
-        for x in params
-    }
+    p = {x["Name"].split("/")[-1]: x["Value"] for x in params}
 
     _connection = pymysql.connect(
         host=p["host"],
@@ -87,13 +83,237 @@ def body(event):
         raise ValueError("Invalid JSON body.")
 
 
-def order_id(event):
+def id_from_path(event, name):
     value = (event.get("pathParameters") or {}).get("id")
 
     if not value or not str(value).isdigit():
-        raise ValueError("Order ID must be a valid integer.")
+        raise ValueError(f"{name} ID must be a valid integer.")
 
     return int(value)
+
+
+def create_customer(event):
+    data = body(event)
+
+    if not data.get("email") or not data.get("name"):
+        raise ValueError("email and name are required.")
+
+    token_hash = data.get("token_hash", "")
+
+    conn = db()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO customers
+                (email, name, token_hash)
+                VALUES (%s, %s, %s)
+                """,
+                (
+                    data["email"].strip(),
+                    data["name"].strip(),
+                    token_hash
+                )
+            )
+
+            customer_id = cur.lastrowid
+
+        conn.commit()
+
+        return response(
+            201,
+            {
+                "message": "Customer created successfully.",
+                "customer_id": customer_id
+            }
+        )
+
+    except pymysql.IntegrityError:
+        conn.rollback()
+        return response(
+            409,
+            {"message": "Email already exists."}
+        )
+
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def list_customers(event):
+    conn = db()
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                customer_id,
+                email,
+                name,
+                created_at,
+                updated_at
+            FROM customers
+            ORDER BY customer_id
+            """
+        )
+
+        return response(
+            200,
+            {"customers": cur.fetchall()}
+        )
+
+
+def get_customer(event):
+    customer_id = id_from_path(event, "Customer")
+    conn = db()
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                customer_id,
+                email,
+                name,
+                created_at,
+                updated_at
+            FROM customers
+            WHERE customer_id=%s
+            """,
+            (customer_id,)
+        )
+
+        customer = cur.fetchone()
+
+    if not customer:
+        return response(
+            404,
+            {"message": "Customer not found."}
+        )
+
+    return response(
+        200,
+        {"customer": customer}
+    )
+
+
+def update_customer(event):
+    customer_id = id_from_path(event, "Customer")
+    data = body(event)
+
+    if not data:
+        raise ValueError("Request body cannot be empty.")
+
+    fields = []
+    values = []
+
+    if "name" in data:
+        fields.append("name=%s")
+        values.append(data["name"].strip())
+
+    if "email" in data:
+        fields.append("email=%s")
+        values.append(data["email"].strip())
+
+    if "token_hash" in data:
+        fields.append("token_hash=%s")
+        values.append(data["token_hash"])
+
+    if not fields:
+        raise ValueError("No fields to update.")
+
+    values.append(customer_id)
+
+    conn = db()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT customer_id FROM customers WHERE customer_id=%s",
+                (customer_id,)
+            )
+
+            if not cur.fetchone():
+                return response(
+                    404,
+                    {"message": "Customer not found."}
+                )
+
+            cur.execute(
+                f"""
+                UPDATE customers
+                SET {",".join(fields)}
+                WHERE customer_id=%s
+                """,
+                values
+            )
+
+        conn.commit()
+
+        return response(
+            200,
+            {
+                "message": "Customer updated successfully.",
+                "customer_id": customer_id
+            }
+        )
+
+    except pymysql.IntegrityError:
+        conn.rollback()
+        return response(
+            409,
+            {"message": "Email already exists."}
+        )
+
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def delete_customer(event):
+    customer_id = id_from_path(event, "Customer")
+    conn = db()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT customer_id FROM customers WHERE customer_id=%s",
+                (customer_id,)
+            )
+
+            if not cur.fetchone():
+                return response(
+                    404,
+                    {"message": "Customer not found."}
+                )
+
+            cur.execute(
+                "DELETE FROM customers WHERE customer_id=%s",
+                (customer_id,)
+            )
+
+        conn.commit()
+
+        return response(
+            200,
+            {
+                "message": "Customer deleted successfully.",
+                "customer_id": customer_id
+            }
+        )
+
+    except pymysql.IntegrityError:
+        conn.rollback()
+        return response(
+            409,
+            {
+                "message": "Customer cannot be deleted because orders exist."
+            }
+        )
+
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def create_order(event):
@@ -102,7 +322,7 @@ def create_order(event):
     if "customer_id" not in data:
         raise ValueError("customer_id is required.")
 
-    if "items" not in data or not data["items"]:
+    if not data.get("items"):
         raise ValueError("items are required.")
 
     customer_id = int(data["customer_id"])
@@ -140,29 +360,20 @@ def create_order(event):
             total = Decimal("0.00")
 
             for item in data["items"]:
-
-                if "product_id" not in item or "quantity" not in item:
-                    raise ValueError(
-                        "Each item requires product_id and quantity."
-                    )
-
                 product_id = int(item["product_id"])
                 quantity = int(item["quantity"])
 
                 if quantity <= 0:
-                    raise ValueError(
-                        "Quantity must be greater than 0."
-                    )
+                    raise ValueError("Quantity must be greater than 0.")
 
                 cur.execute(
                     """
-                    SELECT p.price,
-                           i.quantity_available
+                    SELECT p.price, i.quantity_available
                     FROM products p
                     JOIN inventory i
-                      ON p.product_id=i.product_id
+                    ON p.product_id=i.product_id
                     WHERE p.product_id=%s
-                      AND p.is_active=TRUE
+                    AND p.is_active=TRUE
                     FOR UPDATE
                     """,
                     (product_id,)
@@ -219,11 +430,7 @@ def create_order(event):
                     total_amount=%s
                 WHERE order_id=%s
                 """,
-                (
-                    order_number,
-                    total,
-                    oid
-                )
+                (order_number, total, oid)
             )
 
             cur.execute(
@@ -264,17 +471,10 @@ def list_order(event):
     conn = db()
 
     with conn.cursor() as cur:
-
         cur.execute(
             """
-            SELECT
-                order_id,
-                customer_id,
-                order_number,
-                status,
-                total_amount,
-                created_at,
-                updated_at
+            SELECT order_id, customer_id, order_number,
+                   status, total_amount, created_at, updated_at
             FROM orders
             ORDER BY order_id
             """
@@ -287,21 +487,14 @@ def list_order(event):
 
 
 def get_order(event):
-    oid = order_id(event)
+    oid = id_from_path(event, "Order")
     conn = db()
 
     with conn.cursor() as cur:
-
         cur.execute(
             """
-            SELECT
-                order_id,
-                customer_id,
-                order_number,
-                status,
-                total_amount,
-                created_at,
-                updated_at
+            SELECT order_id, customer_id, order_number,
+                   status, total_amount, created_at, updated_at
             FROM orders
             WHERE order_id=%s
             """,
@@ -318,12 +511,8 @@ def get_order(event):
 
         cur.execute(
             """
-            SELECT
-                order_item_id,
-                product_id,
-                quantity,
-                unit_price,
-                total_price
+            SELECT order_item_id, product_id, quantity,
+                   unit_price, total_price
             FROM order_items
             WHERE order_id=%s
             ORDER BY order_item_id
@@ -335,13 +524,8 @@ def get_order(event):
 
         cur.execute(
             """
-            SELECT
-                log_id,
-                event_type,
-                old_status,
-                new_status,
-                message,
-                created_at
+            SELECT log_id, event_type, old_status,
+                   new_status, message, created_at
             FROM order_logs
             WHERE order_id=%s
             ORDER BY log_id
@@ -358,22 +542,16 @@ def get_order(event):
 
 
 def update_order(event):
-    oid = order_id(event)
+    oid = id_from_path(event, "Order")
     data = body(event)
 
-    if "status" not in data:
+    if not data.get("status"):
         raise ValueError("status is required.")
-
-    new_status = data["status"].strip()
-
-    if not new_status:
-        raise ValueError("status cannot be empty.")
 
     conn = db()
 
     try:
         with conn.cursor() as cur:
-
             cur.execute(
                 """
                 SELECT status
@@ -393,6 +571,7 @@ def update_order(event):
                 )
 
             old_status = order["status"]
+            new_status = data["status"].strip()
 
             cur.execute(
                 """
@@ -400,10 +579,7 @@ def update_order(event):
                 SET status=%s
                 WHERE order_id=%s
                 """,
-                (
-                    new_status,
-                    oid
-                )
+                (new_status, oid)
             )
 
             cur.execute(
@@ -440,12 +616,11 @@ def update_order(event):
 
 
 def delete_order(event):
-    oid = order_id(event)
+    oid = id_from_path(event, "Order")
     conn = db()
 
     try:
         with conn.cursor() as cur:
-
             cur.execute(
                 """
                 SELECT status
@@ -463,8 +638,6 @@ def delete_order(event):
                     404,
                     {"message": "Order not found."}
                 )
-
-            old_status = order["status"]
 
             cur.execute(
                 """
@@ -485,7 +658,7 @@ def delete_order(event):
                 (
                     oid,
                     "CANCELLED",
-                    old_status,
+                    order["status"],
                     "CANCELLED",
                     "Order cancelled"
                 )
@@ -508,13 +681,27 @@ def delete_order(event):
 
 
 def lambda_handler(event, context):
-
     try:
         method = event.get("httpMethod", "").upper()
         path = event.get("path", "")
 
         if method == "OPTIONS":
             return response(204, {})
+
+        if method == "POST" and path.endswith("/customer"):
+            return create_customer(event)
+
+        if method == "GET" and path.endswith("/customer"):
+            return list_customers(event)
+
+        if method == "GET" and "/customer/" in path:
+            return get_customer(event)
+
+        if method == "PUT" and "/customer/" in path:
+            return update_customer(event)
+
+        if method == "DELETE" and "/customer/" in path:
+            return delete_customer(event)
 
         if method == "POST" and path.endswith("/order"):
             return create_order(event)
@@ -533,18 +720,14 @@ def lambda_handler(event, context):
 
         return response(
             404,
-            {"message": "Order API route not found."}
+            {"message": "API route not found."}
         )
 
     except ValueError as e:
-        return response(
-            400,
-            {"message": str(e)}
-        )
+        return response(400, {"message": str(e)})
 
     except pymysql.MySQLError as e:
         logger.exception("Database error")
-
         return response(
             500,
             {
@@ -554,8 +737,7 @@ def lambda_handler(event, context):
         )
 
     except Exception as e:
-        logger.exception("Order API error")
-
+        logger.exception("API error")
         return response(
             500,
             {

@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Transform: AWS::Serverless-2016-10-31
 
-Description: CloudMart Product and Order API
+Description: CloudMart Product Customer and Order API
 
 Parameters:
 
@@ -97,19 +97,14 @@ Resources:
 
   OrderApiFunction:
     Type: AWS::Serverless::Function
-
     Properties:
       FunctionName:
         !Sub CloudMart-Order-API-${Environment}
 
       Runtime: python3.12
-
       Handler: lambda_function.lambda_handler
-
       CodeUri: ../../src/order/
-
       MemorySize: 256
-
       Timeout: 30
 
       Role:
@@ -138,6 +133,46 @@ Resources:
               CloudMart-DatabaseSecretArn
 
       Events:
+
+        CreateCustomer:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /customer
+            Method: POST
+
+        GetCustomers:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /customer
+            Method: GET
+
+        GetCustomer:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /customer/{id}
+            Method: GET
+
+        UpdateCustomer:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /customer/{id}
+            Method: PUT
+
+        DeleteCustomer:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /customer/{id}
+            Method: DELETE
 
         CreateOrder:
           Type: Api
@@ -182,10 +217,9 @@ Resources:
 
   ProductApi:
     Type: AWS::Serverless::Api
-
     Properties:
       Name:
-        !Sub CloudMart-Product-Order-API-${Environment}
+        !Sub CloudMart-Product-Customer-Order-API-${Environment}
 
       StageName:
         !Ref Environment
@@ -204,7 +238,6 @@ Resources:
         Authorizers:
 
           CloudMartAuthorizer:
-
             FunctionArn:
               Fn::ImportValue:
                 !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
@@ -221,7 +254,7 @@ Resources:
 Outputs:
 
   ProductApiUrl:
-    Description: CloudMart Product and Order API URL
+    Description: CloudMart API URL
 
     Value:
       !Sub
@@ -253,7 +286,7 @@ Outputs:
 
 
   OrderApiFunctionArn:
-    Description: CloudMart Order Lambda ARN
+    Description: CloudMart Order and Customer Lambda ARN
 
     Value:
       !GetAtt OrderApiFunction.Arn
@@ -264,7 +297,7 @@ Outputs:
 
 
   OrderApiFunctionName:
-    Description: CloudMart Order Lambda name
+    Description: CloudMart Order and Customer Lambda name
 
     Value:
       !Ref OrderApiFunction
