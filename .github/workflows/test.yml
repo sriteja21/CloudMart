@@ -27,13 +27,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build Application
+        run: |
+          sam build \
+            --template-file infrastructure/cloudformation/application.yml
+
       - name: Deploy Application
         run: |
-          aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/application.yml \
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
             --stack-name cloudmart-application \
             --region $AWS_REGION \
+            --resolve-s3 \
             --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
       - name: Deploy Event Driven
