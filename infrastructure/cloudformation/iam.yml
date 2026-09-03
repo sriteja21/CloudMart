@@ -233,7 +233,7 @@ Resources:
 
 
       # ------------------------------------------------------
-      # INLINE POLICIES
+      # LAMBDA POLICIES
       # ------------------------------------------------------
 
       Policies:
@@ -259,10 +259,8 @@ Resources:
 
                 Resource:
 
-                  # Product Lambda log group
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Product-API-${Environment}:*
 
-                  # Order / Customer Lambda log group
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Order-API-${Environment}:*
 
 
@@ -341,11 +339,10 @@ Resources:
         # VPC NETWORK INTERFACES
         # ====================================================
         #
-        # These EC2 network-interface actions require
-        # Resource: '*'.
+        # These actions require Resource: '*'.
         #
-        # Lambda needs these permissions because the
-        # Product and Order Lambdas run inside the VPC.
+        # Lambda requires these permissions when configured
+        # to run inside a VPC.
         # ====================================================
 
         - PolicyName: LambdaVPCAccess
@@ -400,7 +397,7 @@ Resources:
 
 
       # ------------------------------------------------------
-      # INLINE POLICIES
+      # AUTHORIZER POLICIES
       # ------------------------------------------------------
 
       Policies:
@@ -453,16 +450,6 @@ Resources:
 
   # ========================================================
   # CLOUDFORMATION EXECUTION ROLE
-  # ========================================================
-  #
-  # NOTE:
-  # This role is different from Lambda execution roles.
-  #
-  # CloudFormation needs permission to create/update the
-  # resources in the CloudMart stacks.
-  #
-  # We restrict iam:PassRole separately so that this role
-  # can pass only the Lambda roles created by CloudMart.
   # ========================================================
 
   CloudFormationExecutionRole:
@@ -520,7 +507,7 @@ Resources:
 
 
               # ==================================================
-              # IAM
+              # IAM ROLE MANAGEMENT
               # ==================================================
 
               - Effect: Allow
@@ -545,8 +532,19 @@ Resources:
               # IAM PASSROLE
               # ==================================================
               #
-              # Only allow CloudFormation to pass CloudMart
-              # roles to AWS services.
+              # IMPORTANT:
+              # Do NOT reference CloudFormationExecutionRole
+              # using !GetAtt here.
+              #
+              # Doing so creates:
+              #
+              # CloudFormationExecutionRole
+              #          ↓
+              #      !GetAtt itself
+              #          ↓
+              #      Circular dependency
+              #
+              # Therefore only the Lambda roles are listed.
               # ==================================================
 
               - Effect: Allow
@@ -555,9 +553,10 @@ Resources:
                   - iam:PassRole
 
                 Resource:
-                  - !GetAtt LambdaExecutionRole.Arn
-                  - !GetAtt LambdaAuthorizerRole.Arn
-                  - !GetAtt CloudFormationExecutionRole.Arn
+
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Execution-Role-${Environment}
+
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Authorizer-Role-${Environment}
 
 
               # ==================================================
@@ -613,6 +612,7 @@ Resources:
                   - ssm:RemoveTagsFromResource
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/*
 
 
@@ -702,7 +702,9 @@ Resources:
                   - events:UntagResource
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
+
                   - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/cloudmart-${Environment}-*
 
 
@@ -724,7 +726,9 @@ Resources:
                   - sns:UntagResource
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-low-stock-alerts
+
                   - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-order-notifications
 
 
@@ -764,6 +768,7 @@ Resources:
                   - logs:UntagResource
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-*
 
 
