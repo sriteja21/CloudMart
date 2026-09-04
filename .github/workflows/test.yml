@@ -262,8 +262,8 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${{ secrets.ORDER_NOTIFICATION_EMAIL }}" ]; then
-            echo "ORDER_NOTIFICATION_EMAIL secret is missing"
+          if [ -z "${{ secrets.LOW_STOCK_EMAIL }}" ]; then
+            echo "LOW_STOCK_EMAIL secret is missing"
             exit 1
           fi
 
@@ -278,7 +278,7 @@ jobs:
             --parameter-overrides \
               Environment=dev \
               LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
-              OrderNotificationEmail="${{ secrets.ORDER_NOTIFICATION_EMAIL }}" \
+              OrderNotificationEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
             --no-fail-on-empty-changeset
 
           echo "Event-driven deployment successful"
