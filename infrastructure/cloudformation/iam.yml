@@ -14,9 +14,7 @@ Parameters:
   # --------------------------------------------------------
 
   Environment:
-
     Type: String
-
     Default: dev
 
     AllowedValues:
@@ -31,11 +29,8 @@ Parameters:
   # --------------------------------------------------------
 
   AuthToken:
-
     Type: String
-
     Default: test-token-12345
-
     NoEcho: true
 
     Description: Authorization token for Lambda Authorizer
@@ -46,9 +41,7 @@ Parameters:
   # --------------------------------------------------------
 
   ReportS3BucketName:
-
     Type: String
-
     Default: cloudmart-dev-reports-test
 
     Description: S3 bucket used for daily reports
@@ -62,15 +55,13 @@ Resources:
 
 
   # ========================================================
-  # AUTH TOKEN
+  # AUTH TOKEN SSM PARAMETER
   # ========================================================
 
   AuthTokenParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/auth/token
 
@@ -88,11 +79,9 @@ Resources:
   # ========================================================
 
   DatabaseHostParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/database/host
 
@@ -110,11 +99,9 @@ Resources:
   # ========================================================
 
   DatabasePortParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/database/port
 
@@ -132,11 +119,9 @@ Resources:
   # ========================================================
 
   DatabaseNameParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/database/name
 
@@ -151,28 +136,20 @@ Resources:
 
   # ========================================================
   # DATABASE USERNAME
-  #
-  # Automatically obtained from the RDS Secrets Manager
-  # secret created by the database stack.
   # ========================================================
 
   DatabaseUsernameParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/database/username
 
       Type: String
 
       Value:
-
         Fn::Sub:
-
           - '{{resolve:secretsmanager:${SecretArn}:SecretString:username}}'
-
           - SecretArn:
               Fn::ImportValue: CloudMart-DatabaseSecretArn
 
@@ -182,33 +159,20 @@ Resources:
 
   # ========================================================
   # DATABASE PASSWORD
-  #
-  # Automatically obtained from the RDS Secrets Manager
-  # secret created by the database stack.
-  #
-  # NOTE:
-  # This copies the secret value into SSM as a String.
-  # For production, preferably read the password directly
-  # from Secrets Manager instead.
   # ========================================================
 
   DatabasePasswordParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/database/password
 
       Type: String
 
       Value:
-
         Fn::Sub:
-
           - '{{resolve:secretsmanager:${SecretArn}:SecretString:password}}'
-
           - SecretArn:
               Fn::ImportValue: CloudMart-DatabaseSecretArn
 
@@ -217,15 +181,13 @@ Resources:
 
 
   # ========================================================
-  # REPORT S3 BUCKET
+  # REPORT S3 BUCKET PARAMETER
   # ========================================================
 
   ReportS3BucketParameter:
-
     Type: AWS::SSM::Parameter
 
     Properties:
-
       Name:
         !Sub /app/${Environment}/s3/report-bucket
 
@@ -243,7 +205,6 @@ Resources:
   # ========================================================
 
   LambdaExecutionRole:
-
     Type: AWS::IAM::Role
 
     Properties:
@@ -257,7 +218,6 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
-
         Version: '2012-10-17'
 
         Statement:
@@ -265,7 +225,6 @@ Resources:
           - Effect: Allow
 
             Principal:
-
               Service:
                 - lambda.amazonaws.com
 
@@ -287,7 +246,6 @@ Resources:
         - PolicyName: LambdaCloudWatchLogs
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -295,22 +253,24 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
 
-                Resource: '*'
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Product-API-${Environment}:*
+
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Order-API-${Environment}:*
 
 
         # ====================================================
-        # SSM DATABASE CONFIGURATION
+        # SSM DATABASE PARAMETERS
         # ====================================================
 
         - PolicyName: LambdaDatabaseSSMAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -318,26 +278,29 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - ssm:GetParameter
                   - ssm:GetParameters
 
                 Resource:
 
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/host
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/port
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/name
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/username
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/password
 
 
         # ====================================================
         # SECRETS MANAGER
-        #
-        # Kept because other Lambda functions may read
-        # the database secret directly.
         # ====================================================
 
         - PolicyName: LambdaDatabaseSecretAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -345,11 +308,9 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - secretsmanager:GetSecretValue
 
                 Resource:
-
                   Fn::ImportValue: CloudMart-DatabaseSecretArn
 
 
@@ -360,7 +321,6 @@ Resources:
         - PolicyName: LambdaEventBridgeAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -368,22 +328,26 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - events:PutEvents
 
-                Resource: '*'
+                Resource:
+                  Fn::ImportValue:
+                    !Sub CloudMart-${Environment}-EventBusArn
 
 
         # ====================================================
         # VPC NETWORK INTERFACES
+        # ====================================================
         #
-        # Required because Lambda runs inside the VPC.
+        # These actions require Resource: '*'.
+        #
+        # Lambda requires these permissions when configured
+        # to run inside a VPC.
         # ====================================================
 
         - PolicyName: LambdaVPCAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -391,7 +355,6 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - ec2:CreateNetworkInterface
                   - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
@@ -406,7 +369,6 @@ Resources:
   # ========================================================
 
   LambdaAuthorizerRole:
-
     Type: AWS::IAM::Role
 
     Properties:
@@ -420,7 +382,6 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
-
         Version: '2012-10-17'
 
         Statement:
@@ -428,7 +389,6 @@ Resources:
           - Effect: Allow
 
             Principal:
-
               Service:
                 - lambda.amazonaws.com
 
@@ -437,7 +397,7 @@ Resources:
 
 
       # ------------------------------------------------------
-      # POLICIES
+      # AUTHORIZER POLICIES
       # ------------------------------------------------------
 
       Policies:
@@ -450,7 +410,6 @@ Resources:
         - PolicyName: AuthorizerCloudWatchLogs
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -458,12 +417,13 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
 
-                Resource: '*'
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Lambda-Authorizer-${Environment}:*
 
 
         # ====================================================
@@ -473,7 +433,6 @@ Resources:
         - PolicyName: AuthorizerSSMAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
@@ -481,7 +440,6 @@ Resources:
               - Effect: Allow
 
                 Action:
-
                   - ssm:GetParameter
                   - ssm:GetParameters
 
@@ -495,7 +453,6 @@ Resources:
   # ========================================================
 
   CloudFormationExecutionRole:
-
     Type: AWS::IAM::Role
 
     Properties:
@@ -509,7 +466,6 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
-
         Version: '2012-10-17'
 
         Statement:
@@ -517,7 +473,6 @@ Resources:
           - Effect: Allow
 
             Principal:
-
               Service:
                 - cloudformation.amazonaws.com
 
@@ -534,29 +489,287 @@ Resources:
         - PolicyName: CloudFormationDeploymentAccess
 
           PolicyDocument:
-
             Version: '2012-10-17'
 
             Statement:
 
+
+              # ==================================================
+              # CLOUDFORMATION
+              # ==================================================
+
               - Effect: Allow
 
                 Action:
-
                   - cloudformation:*
-                  - iam:*
-                  - lambda:*
-                  - apigateway:*
-                  - ssm:*
-                  - ec2:*
-                  - logs:*
-                  - rds:*
-                  - s3:*
-                  - events:*
-                  - sns:*
-                  - secretsmanager:*
 
                 Resource: '*'
+
+
+              # ==================================================
+              # IAM ROLE MANAGEMENT
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-*
+
+
+              # ==================================================
+              # IAM PASSROLE
+              # ==================================================
+              #
+              # IMPORTANT:
+              # Do NOT reference CloudFormationExecutionRole
+              # using !GetAtt here.
+              #
+              # Doing so creates:
+              #
+              # CloudFormationExecutionRole
+              #          ↓
+              #      !GetAtt itself
+              #          ↓
+              #      Circular dependency
+              #
+              # Therefore only the Lambda roles are listed.
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - iam:PassRole
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Execution-Role-${Environment}
+
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Authorizer-Role-${Environment}
+
+
+              # ==================================================
+              # LAMBDA
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:PublishVersion
+                  - lambda:CreateAlias
+                  - lambda:UpdateAlias
+                  - lambda:DeleteAlias
+                  - lambda:GetAlias
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:UntagResource
+
+                Resource:
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:CloudMart-*
+
+
+              # ==================================================
+              # API GATEWAY
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - apigateway:*
+
+                Resource: '*'
+
+
+              # ==================================================
+              # SSM
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:DeleteParameter
+                  - ssm:AddTagsToResource
+                  - ssm:RemoveTagsFromResource
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/*
+
+
+              # ==================================================
+              # EC2 / NETWORK
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeInternetGateways
+                  - ec2:DescribeAvailabilityZones
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteSecurityGroup
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:AuthorizeSecurityGroupEgress
+                  - ec2:RevokeSecurityGroupIngress
+                  - ec2:RevokeSecurityGroupEgress
+                  - ec2:CreateTags
+                  - ec2:DeleteTags
+
+                Resource: '*'
+
+
+              # ==================================================
+              # RDS
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - rds:CreateDBInstance
+                  - rds:DeleteDBInstance
+                  - rds:DescribeDBInstances
+                  - rds:ModifyDBInstance
+                  - rds:CreateDBSubnetGroup
+                  - rds:DeleteDBSubnetGroup
+                  - rds:DescribeDBSubnetGroups
+                  - rds:ModifyDBSubnetGroup
+                  - rds:AddTagsToResource
+                  - rds:ListTagsForResource
+
+                Resource: '*'
+
+
+              # ==================================================
+              # S3
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketTagging
+                  - s3:PutBucketTagging
+                  - s3:ListBucket
+
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}
+
+
+              # ==================================================
+              # EVENTBRIDGE
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - events:CreateEventBus
+                  - events:DeleteEventBus
+                  - events:DescribeEventBus
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:DescribeRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:EnableRule
+                  - events:DisableRule
+                  - events:TagResource
+                  - events:UntagResource
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
+
+                  - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/cloudmart-${Environment}-*
+
+
+              # ==================================================
+              # SNS
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:GetTopicAttributes
+                  - sns:SetTopicAttributes
+                  - sns:Subscribe
+                  - sns:Unsubscribe
+                  - sns:ListSubscriptionsByTopic
+                  - sns:TagResource
+                  - sns:UntagResource
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-low-stock-alerts
+
+                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-order-notifications
+
+
+              # ==================================================
+              # SECRETS MANAGER
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:DeleteSecret
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:TagResource
+                  - secretsmanager:UntagResource
+
+                Resource:
+                  Fn::ImportValue: CloudMart-DatabaseSecretArn
+
+
+              # ==================================================
+              # CLOUDWATCH LOGS
+              # ==================================================
+
+              - Effect: Allow
+
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:PutRetentionPolicy
+                  - logs:DeleteRetentionPolicy
+                  - logs:TagResource
+                  - logs:UntagResource
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-*
 
 
 # ==========================================================
@@ -579,7 +792,6 @@ Outputs:
       !GetAtt LambdaExecutionRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
@@ -597,7 +809,6 @@ Outputs:
       !GetAtt LambdaAuthorizerRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
 
@@ -615,7 +826,6 @@ Outputs:
       !GetAtt CloudFormationExecutionRole.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-CloudFormationExecutionRoleArn-${Environment}
 
@@ -633,7 +843,6 @@ Outputs:
       !Sub /app/${Environment}/s3/report-bucket
 
     Export:
-
       Name:
         !Sub CloudMart-ReportS3BucketParameter-${Environment}
 
@@ -651,7 +860,6 @@ Outputs:
       !Sub /app/${Environment}/database/username
 
     Export:
-
       Name:
         !Sub CloudMart-DatabaseUsernameParameter-${Environment}
 
@@ -669,6 +877,5 @@ Outputs:
       !Sub /app/${Environment}/database/password
 
     Export:
-
       Name:
         !Sub CloudMart-DatabasePasswordParameter-${Environment}
