@@ -1,9 +1,9 @@
 name: CloudMart Deploy
-
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 env:
@@ -15,12 +15,16 @@ permissions:
 
 jobs:
 
+  # ==========================================================
+  # 1. VALIDATE
+  # ==========================================================
   validate:
     name: Validate
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -33,6 +37,8 @@ jobs:
           set -e
 
           for template in infrastructure/cloudformation/*.yml; do
+            echo "Validating $template"
+
             aws cloudformation validate-template \
               --template-body "file://$template" \
               >/dev/null
@@ -41,13 +47,17 @@ jobs:
           echo "Validation successful"
 
 
+  # ==========================================================
+  # 2. NETWORK
+  # ==========================================================
   network:
     name: Network
     needs: validate
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -66,13 +76,17 @@ jobs:
           echo "Network deployment successful"
 
 
+  # ==========================================================
+  # 3. DATABASE
+  # ==========================================================
   database:
     name: Database
     needs: network
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -99,6 +113,8 @@ jobs:
             --output text)
 
           if [ -n "$DB_ID" ] && [ "$DB_ID" != "None" ]; then
+            echo "Waiting for RDS instance: $DB_ID"
+
             aws rds wait db-instance-available \
               --db-instance-identifier "$DB_ID" \
               --region "$AWS_REGION"
@@ -107,13 +123,17 @@ jobs:
           echo "RDS available"
 
 
+  # ==========================================================
+  # 4. IAM
+  # ==========================================================
   iam:
     name: IAM
     needs: database
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -142,6 +162,8 @@ jobs:
             CloudMart-DatabaseEndpoint \
             CloudMart-DatabaseSecretArn
           do
+            echo "Checking export: $export"
+
             VALUE=$(aws cloudformation list-exports \
               --region "$AWS_REGION" \
               --query "Exports[?Name=='$export'].Value | [0]" \
@@ -151,19 +173,22 @@ jobs:
               echo "Missing export: $export"
               exit 1
             fi
+
+            echo "Verified: $export"
           done
 
           echo "IAM exports verified"
 
 
+  # ==========================================================
+  # 5. AUTH
+  # ==========================================================
   auth:
     name: Auth
     needs: iam
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -209,13 +234,17 @@ jobs:
           echo "Authorizer verified"
 
 
+  # ==========================================================
+  # 6. EVENT DRIVEN
+  # ==========================================================
   event-driven:
     name: Event Driven
     needs: auth
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -223,7 +252,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Event Driven Stack
+      - name: Validate Email Secrets
         run: |
           set -e
 
@@ -232,6 +261,15 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${{ secrets.LOW_STOCK_EMAIL }}" ]; then
+            echo "LOW_STOCK_EMAIL secret is missing"
+            exit 1
+          fi
+
+          echo "Required email secrets are available"
+
+      - name: Deploy Event Driven Stack
+        run: |
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/event-driven-stack.yml \
             --stack-name cloudmart-event-driven \
@@ -239,6 +277,7 @@ jobs:
             --parameter-overrides \
               Environment=dev \
               LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
+              OrderNotificationEmail="${{ secrets.LOW_STOCK_EMAIL }}" \
             --no-fail-on-empty-changeset
 
           echo "Event-driven deployment successful"
@@ -257,22 +296,30 @@ jobs:
             --query "Exports[?Name=='CloudMart-dev-EventBusName'].Value | [0]" \
             --output text)
 
-          test -n "$TOPIC"
-          test "$TOPIC" != "None"
+          if [ -z "$TOPIC" ] || [ "$TOPIC" = "None" ]; then
+            echo "Low stock SNS topic export is missing"
+            exit 1
+          fi
 
-          test -n "$BUS"
-          test "$BUS" != "None"
+          if [ -z "$BUS" ] || [ "$BUS" = "None" ]; then
+            echo "EventBridge bus export is missing"
+            exit 1
+          fi
 
           echo "SNS and EventBridge verified"
 
 
+  # ==========================================================
+  # 7. APPLICATION / PRODUCT + ORDER API
+  # ==========================================================
   application:
     name: Product API
     needs: event-driven
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -295,6 +342,8 @@ jobs:
 
       - name: Verify Build
         run: |
+          set -e
+
           test -f .aws-sam/build/ProductApiFunction/lambda_function.py
           test -f .aws-sam/build/ProductApiFunction/schema.sql
 
