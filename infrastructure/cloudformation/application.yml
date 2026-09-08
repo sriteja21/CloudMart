@@ -5,6 +5,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: CloudMart Product Customer and Order API
 
 
+# ==========================================================
+# PARAMETERS
+# ==========================================================
+
 Parameters:
 
   Environment:
@@ -15,6 +19,10 @@ Parameters:
       - dev
       - prod
 
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
 
 Resources:
 
@@ -42,39 +50,22 @@ Resources:
 
       Timeout: 30
 
-
-      # ------------------------------------------------------
-      # IAM ROLE
-      # ------------------------------------------------------
-
       Role:
         Fn::ImportValue:
           !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-
-      # ------------------------------------------------------
-      # VPC
-      # ------------------------------------------------------
-
       VpcConfig:
 
         SecurityGroupIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Lambda-SG-ID
 
         SubnetIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-ID
 
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-2-ID
-
-
-      # ------------------------------------------------------
-      # ENVIRONMENT
-      # ------------------------------------------------------
 
       Environment:
 
@@ -84,18 +75,16 @@ Resources:
             !Ref Environment
 
 
-      # ------------------------------------------------------
-      # API EVENTS
-      # ------------------------------------------------------
+      # ----------------------------------------------------
+      # PRODUCT API EVENTS
+      # ----------------------------------------------------
 
       Events:
 
         GetProducts:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -105,11 +94,9 @@ Resources:
 
 
         CreateProduct:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -119,11 +106,9 @@ Resources:
 
 
         GetProduct:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -133,11 +118,9 @@ Resources:
 
 
         UpdateProduct:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -147,11 +130,9 @@ Resources:
 
 
         DeleteProduct:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -183,39 +164,22 @@ Resources:
 
       Timeout: 30
 
-
-      # ------------------------------------------------------
-      # IAM ROLE
-      # ------------------------------------------------------
-
       Role:
         Fn::ImportValue:
           !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-
-      # ------------------------------------------------------
-      # VPC
-      # ------------------------------------------------------
-
       VpcConfig:
 
         SecurityGroupIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Lambda-SG-ID
 
         SubnetIds:
-
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-ID
 
           - Fn::ImportValue:
               !Sub CloudMart-Private-Subnet-2-ID
-
-
-      # ------------------------------------------------------
-      # ENVIRONMENT
-      # ------------------------------------------------------
 
       Environment:
 
@@ -225,23 +189,16 @@ Resources:
             !Ref Environment
 
 
-      # ------------------------------------------------------
-      # API EVENTS
-      # ------------------------------------------------------
+      # ----------------------------------------------------
+      # CUSTOMER / ORDER API EVENTS
+      # ----------------------------------------------------
 
       Events:
 
-
-        # ====================================================
-        # CUSTOMER
-        # ====================================================
-
         CreateCustomer:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -251,11 +208,9 @@ Resources:
 
 
         GetCustomers:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -265,11 +220,9 @@ Resources:
 
 
         GetCustomer:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -279,11 +232,9 @@ Resources:
 
 
         UpdateCustomer:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -293,11 +244,9 @@ Resources:
 
 
         DeleteCustomer:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -306,16 +255,10 @@ Resources:
             Method: DELETE
 
 
-        # ====================================================
-        # ORDER
-        # ====================================================
-
         CreateOrder:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -325,11 +268,9 @@ Resources:
 
 
         GetOrders:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -339,11 +280,9 @@ Resources:
 
 
         GetOrder:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -353,11 +292,9 @@ Resources:
 
 
         UpdateOrder:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -367,11 +304,9 @@ Resources:
 
 
         DeleteOrder:
-
           Type: Api
 
           Properties:
-
             RestApiId:
               !Ref ProductApi
 
@@ -407,11 +342,6 @@ Resources:
 
         AllowOrigin: "'*'"
 
-
-      # ------------------------------------------------------
-      # AUTHORIZER
-      # ------------------------------------------------------
-
       Auth:
 
         DefaultAuthorizer: CloudMartAuthorizer
@@ -441,6 +371,10 @@ Resources:
 Outputs:
 
 
+  # --------------------------------------------------------
+  # API URL
+  # --------------------------------------------------------
+
   ProductApiUrl:
 
     Description: CloudMart API URL
@@ -454,6 +388,10 @@ Outputs:
             !Ref ProductApi
 
 
+  # --------------------------------------------------------
+  # PRODUCT LAMBDA ARN
+  # --------------------------------------------------------
+
   ProductApiFunctionArn:
 
     Description: CloudMart Product Lambda ARN
@@ -462,10 +400,13 @@ Outputs:
       !GetAtt ProductApiFunction.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
 
+
+  # --------------------------------------------------------
+  # PRODUCT LAMBDA NAME
+  # --------------------------------------------------------
 
   ProductApiFunctionName:
 
@@ -475,10 +416,13 @@ Outputs:
       !Ref ProductApiFunction
 
     Export:
-
       Name:
         !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
 
+
+  # --------------------------------------------------------
+  # ORDER LAMBDA ARN
+  # --------------------------------------------------------
 
   OrderApiFunctionArn:
 
@@ -488,10 +432,13 @@ Outputs:
       !GetAtt OrderApiFunction.Arn
 
     Export:
-
       Name:
         !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
 
+
+  # --------------------------------------------------------
+  # ORDER LAMBDA NAME
+  # --------------------------------------------------------
 
   OrderApiFunctionName:
 
@@ -501,6 +448,5 @@ Outputs:
       !Ref OrderApiFunction
 
     Export:
-
       Name:
         !Sub CloudMart-Order-Api-Lambda-Name-${Environment}

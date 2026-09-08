@@ -1,8 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: CloudMart Database Stack 
-
-
 # ==========================================================
 # PARAMETERS
 # ==========================================================
@@ -19,6 +17,8 @@ Parameters:
     Type: String
     Default: cloudmartadmin
     Description: RDS MySQL master username
+    MinLength: 1
+    MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
 
   DBPassword:
@@ -46,7 +46,6 @@ Parameters:
 
 Resources:
 
-
   # ========================================================
   # RDS SUBNET GROUP
   # ========================================================
@@ -60,9 +59,7 @@ Resources:
       DBSubnetGroupDescription: CloudMart RDS private subnet group
 
       SubnetIds:
-
         - Fn::ImportValue: CloudMart-Private-Subnet-ID
-
         - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
 
       Tags:
@@ -86,7 +83,6 @@ Resources:
     Type: AWS::RDS::DBInstance
 
     DeletionPolicy: Snapshot
-
     UpdateReplacePolicy: Snapshot
 
     Properties:
@@ -111,7 +107,6 @@ Resources:
         Ref: CloudMartDBSubnetGroup
 
       VPCSecurityGroups:
-
         - Fn::ImportValue: CloudMart-RDS-SG-ID
 
       PubliclyAccessible: false
@@ -145,6 +140,9 @@ Resources:
 
 Outputs:
 
+  # --------------------------------------------------------
+  # DATABASE IDENTIFIER
+  # --------------------------------------------------------
 
   DatabaseIdentifier:
 
@@ -155,6 +153,10 @@ Outputs:
     Export:
       Name: CloudMart-DatabaseIdentifier
 
+
+  # --------------------------------------------------------
+  # DATABASE ENDPOINT
+  # --------------------------------------------------------
 
   DatabaseEndpoint:
 
@@ -169,6 +171,10 @@ Outputs:
       Name: CloudMart-DatabaseEndpoint
 
 
+  # --------------------------------------------------------
+  # DATABASE PORT
+  # --------------------------------------------------------
+
   DatabasePort:
 
     Description: CloudMart RDS MySQL port
@@ -182,6 +188,10 @@ Outputs:
       Name: CloudMart-DatabasePort
 
 
+  # --------------------------------------------------------
+  # DATABASE NAME
+  # --------------------------------------------------------
+
   DatabaseName:
 
     Description: CloudMart database name
@@ -192,15 +202,9 @@ Outputs:
       Name: CloudMart-DatabaseName
 
 
-  DatabaseUsername:
-
-    Description: CloudMart RDS database username
-
-    Value: !Ref DBUsername
-
-    Export:
-      Name: CloudMart-DatabaseUsername
-
+  # --------------------------------------------------------
+  # DATABASE SUBNET GROUP
+  # --------------------------------------------------------
 
   DatabaseSubnetGroup:
 
