@@ -333,8 +333,7 @@ Resources:
                   - events:PutEvents
 
                 Resource:
-                  Fn::ImportValue:
-                    !Sub CloudMart-${Environment}-EventBusArn
+                  !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
 
 
         # ====================================================
