@@ -4,32 +4,16 @@ Transform: AWS::Serverless-2016-10-31
 
 Description: CloudMart Product Customer and Order API
 
-
-# ==========================================================
-# PARAMETERS
-# ==========================================================
-
 Parameters:
 
   Environment:
     Type: String
     Default: dev
-
     AllowedValues:
       - dev
       - prod
 
-
-# ==========================================================
-# RESOURCES
-# ==========================================================
-
 Resources:
-
-
-  # ========================================================
-  # PRODUCT API LAMBDA
-  # ========================================================
 
   ProductApiFunction:
 
@@ -74,76 +58,48 @@ Resources:
           ENVIRONMENT:
             !Ref Environment
 
-
-      # ----------------------------------------------------
-      # PRODUCT API EVENTS
-      # ----------------------------------------------------
-
       Events:
 
         GetProducts:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /product
-
             Method: GET
-
 
         CreateProduct:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /product
-
             Method: POST
-
 
         GetProduct:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: GET
-
 
         UpdateProduct:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: PUT
-
 
         DeleteProduct:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /product/{id}
-
             Method: DELETE
 
-
-  # ========================================================
-  # ORDER / CUSTOMER API LAMBDA
-  # ========================================================
 
   OrderApiFunction:
 
@@ -188,136 +144,104 @@ Resources:
           ENVIRONMENT:
             !Ref Environment
 
-
-      # ----------------------------------------------------
-      # CUSTOMER / ORDER API EVENTS
-      # ----------------------------------------------------
-
       Events:
 
         CreateCustomer:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /customer
-
             Method: POST
-
 
         GetCustomers:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /customer
-
             Method: GET
-
 
         GetCustomer:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /customer/{id}
-
             Method: GET
-
 
         UpdateCustomer:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /customer/{id}
-
             Method: PUT
-
 
         DeleteCustomer:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /customer/{id}
-
             Method: DELETE
-
 
         CreateOrder:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /order
-
             Method: POST
-
 
         GetOrders:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /order
-
             Method: GET
-
 
         GetOrder:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /order/{id}
-
             Method: GET
-
 
         UpdateOrder:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /order/{id}
-
             Method: PUT
-
 
         DeleteOrder:
           Type: Api
-
           Properties:
             RestApiId:
               !Ref ProductApi
-
             Path: /order/{id}
-
             Method: DELETE
 
+        GetCustomerOrders:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order/customer/{id}
+            Method: GET
 
-  # ========================================================
-  # API GATEWAY
-  # ========================================================
+        CancelOrder:
+          Type: Api
+          Properties:
+            RestApiId:
+              !Ref ProductApi
+            Path: /order/{id}/cancel
+            Method: POST
+
 
   ProductApi:
 
@@ -364,16 +288,7 @@ Resources:
             AuthorizerResultTtlInSeconds: 0
 
 
-# ==========================================================
-# OUTPUTS
-# ==========================================================
-
 Outputs:
-
-
-  # --------------------------------------------------------
-  # API URL
-  # --------------------------------------------------------
 
   ProductApiUrl:
 
@@ -383,14 +298,9 @@ Outputs:
 
       !Sub
         - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-
         - ApiId:
             !Ref ProductApi
 
-
-  # --------------------------------------------------------
-  # PRODUCT LAMBDA ARN
-  # --------------------------------------------------------
 
   ProductApiFunctionArn:
 
@@ -404,10 +314,6 @@ Outputs:
         !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
 
 
-  # --------------------------------------------------------
-  # PRODUCT LAMBDA NAME
-  # --------------------------------------------------------
-
   ProductApiFunctionName:
 
     Description: CloudMart Product Lambda name
@@ -420,10 +326,6 @@ Outputs:
         !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
 
 
-  # --------------------------------------------------------
-  # ORDER LAMBDA ARN
-  # --------------------------------------------------------
-
   OrderApiFunctionArn:
 
     Description: CloudMart Order and Customer Lambda ARN
@@ -435,10 +337,6 @@ Outputs:
       Name:
         !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
 
-
-  # --------------------------------------------------------
-  # ORDER LAMBDA NAME
-  # --------------------------------------------------------
 
   OrderApiFunctionName:
 
