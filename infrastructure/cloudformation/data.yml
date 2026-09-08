@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Database Stack - Free Tier Development Configuration
+Description: CloudMart Database Stack 
 
 
 # ==========================================================
@@ -14,6 +14,19 @@ Parameters:
     Default: cloudmart
     Description: CloudMart database name
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+
+  DBUsername:
+    Type: String
+    Default: cloudmartadmin
+    Description: RDS MySQL master username
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: RDS MySQL master password
+    MinLength: 8
+    MaxLength: 41
 
   DBInstanceClass:
     Type: String
@@ -32,40 +45,6 @@ Parameters:
 # ==========================================================
 
 Resources:
-
-
-  # ========================================================
-  # DATABASE SECRET
-  # ========================================================
-
-  CloudMartDatabaseSecret:
-
-    Type: AWS::SecretsManager::Secret
-
-    Properties:
-
-      Description: CloudMart RDS MySQL database credentials
-
-      GenerateSecretString:
-
-        SecretStringTemplate: '{"username":"cloudmartadmin"}'
-
-        GenerateStringKey: password
-
-        PasswordLength: 32
-
-        ExcludeCharacters: '"@/\'
-
-      Tags:
-
-        - Key: Name
-          Value: CloudMart-Database-Secret
-
-        - Key: Project
-          Value: CloudMart
-
-        - Key: Environment
-          Value: dev
 
 
   # ========================================================
@@ -118,21 +97,9 @@ Resources:
 
       DBName: !Ref DBName
 
-      MasterUsername:
+      MasterUsername: !Ref DBUsername
 
-        Fn::Sub:
-
-          - '{{resolve:secretsmanager:${SecretArn}:SecretString:username}}'
-
-          - SecretArn: !Ref CloudMartDatabaseSecret
-
-      MasterUserPassword:
-
-        Fn::Sub:
-
-          - '{{resolve:secretsmanager:${SecretArn}:SecretString:password}}'
-
-          - SecretArn: !Ref CloudMartDatabaseSecret
+      MasterUserPassword: !Ref DBPassword
 
       DBInstanceClass: !Ref DBInstanceClass
 
@@ -225,14 +192,14 @@ Outputs:
       Name: CloudMart-DatabaseName
 
 
-  DatabaseSecretArn:
+  DatabaseUsername:
 
-    Description: CloudMart database secret ARN
+    Description: CloudMart RDS database username
 
-    Value: !Ref CloudMartDatabaseSecret
+    Value: !Ref DBUsername
 
     Export:
-      Name: CloudMart-DatabaseSecretArn
+      Name: CloudMart-DatabaseUsername
 
 
   DatabaseSubnetGroup:

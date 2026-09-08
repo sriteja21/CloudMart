@@ -47,6 +47,33 @@ Parameters:
     Description: S3 bucket used for daily reports
 
 
+  # --------------------------------------------------------
+  # DATABASE USERNAME
+  # --------------------------------------------------------
+
+  DBUsername:
+    Type: String
+    Default: cloudmartadmin
+
+    Description: RDS MySQL database username
+
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+
+  # --------------------------------------------------------
+  # DATABASE PASSWORD
+  # --------------------------------------------------------
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+
+    Description: RDS MySQL database password
+
+    MinLength: 8
+    MaxLength: 41
+
+
 # ==========================================================
 # RESOURCES
 # ==========================================================
@@ -59,9 +86,11 @@ Resources:
   # ========================================================
 
   AuthTokenParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/auth/token
 
@@ -79,9 +108,11 @@ Resources:
   # ========================================================
 
   DatabaseHostParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/database/host
 
@@ -99,9 +130,11 @@ Resources:
   # ========================================================
 
   DatabasePortParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/database/port
 
@@ -119,9 +152,11 @@ Resources:
   # ========================================================
 
   DatabaseNameParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/database/name
 
@@ -139,22 +174,21 @@ Resources:
   # ========================================================
 
   DatabaseUsernameParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/database/username
 
       Type: String
 
       Value:
-        Fn::Sub:
-          - '{{resolve:secretsmanager:${SecretArn}:SecretString:username}}'
-          - SecretArn:
-              Fn::ImportValue: CloudMart-DatabaseSecretArn
+        !Ref DBUsername
 
       Description:
-        RDS database username obtained from Secrets Manager
+        RDS database username
 
 
   # ========================================================
@@ -162,22 +196,21 @@ Resources:
   # ========================================================
 
   DatabasePasswordParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/database/password
 
       Type: String
 
       Value:
-        Fn::Sub:
-          - '{{resolve:secretsmanager:${SecretArn}:SecretString:password}}'
-          - SecretArn:
-              Fn::ImportValue: CloudMart-DatabaseSecretArn
+        !Ref DBPassword
 
       Description:
-        RDS database password obtained from Secrets Manager
+        RDS database password
 
 
   # ========================================================
@@ -185,9 +218,11 @@ Resources:
   # ========================================================
 
   ReportS3BucketParameter:
+
     Type: AWS::SSM::Parameter
 
     Properties:
+
       Name:
         !Sub /app/${Environment}/s3/report-bucket
 
@@ -205,6 +240,7 @@ Resources:
   # ========================================================
 
   LambdaExecutionRole:
+
     Type: AWS::IAM::Role
 
     Properties:
@@ -218,6 +254,7 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
+
         Version: '2012-10-17'
 
         Statement:
@@ -246,6 +283,7 @@ Resources:
         - PolicyName: LambdaCloudWatchLogs
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -271,6 +309,7 @@ Resources:
         - PolicyName: LambdaDatabaseSSMAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -295,32 +334,13 @@ Resources:
 
 
         # ====================================================
-        # SECRETS MANAGER
-        # ====================================================
-
-        - PolicyName: LambdaDatabaseSecretAccess
-
-          PolicyDocument:
-            Version: '2012-10-17'
-
-            Statement:
-
-              - Effect: Allow
-
-                Action:
-                  - secretsmanager:GetSecretValue
-
-                Resource:
-                  Fn::ImportValue: CloudMart-DatabaseSecretArn
-
-
-        # ====================================================
         # EVENTBRIDGE
         # ====================================================
 
         - PolicyName: LambdaEventBridgeAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -348,6 +368,7 @@ Resources:
         - PolicyName: LambdaVPCAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -369,6 +390,7 @@ Resources:
   # ========================================================
 
   LambdaAuthorizerRole:
+
     Type: AWS::IAM::Role
 
     Properties:
@@ -382,6 +404,7 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
+
         Version: '2012-10-17'
 
         Statement:
@@ -410,6 +433,7 @@ Resources:
         - PolicyName: AuthorizerCloudWatchLogs
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -433,6 +457,7 @@ Resources:
         - PolicyName: AuthorizerSSMAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -453,6 +478,7 @@ Resources:
   # ========================================================
 
   CloudFormationExecutionRole:
+
     Type: AWS::IAM::Role
 
     Properties:
@@ -466,6 +492,7 @@ Resources:
       # ------------------------------------------------------
 
       AssumeRolePolicyDocument:
+
         Version: '2012-10-17'
 
         Statement:
@@ -489,6 +516,7 @@ Resources:
         - PolicyName: CloudFormationDeploymentAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -525,6 +553,7 @@ Resources:
                   - iam:UntagRole
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-*
 
 
@@ -582,6 +611,7 @@ Resources:
                   - lambda:UntagResource
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:CloudMart-*
 
 
@@ -678,6 +708,7 @@ Resources:
                   - s3:ListBucket
 
                 Resource:
+
                   - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}
 
 
@@ -730,26 +761,6 @@ Resources:
                   - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-low-stock-alerts
 
                   - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloudmart-${Environment}-order-notifications
-
-
-              # ==================================================
-              # SECRETS MANAGER
-              # ==================================================
-
-              - Effect: Allow
-
-                Action:
-                  - secretsmanager:CreateSecret
-                  - secretsmanager:DeleteSecret
-                  - secretsmanager:DescribeSecret
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:PutSecretValue
-                  - secretsmanager:UpdateSecret
-                  - secretsmanager:TagResource
-                  - secretsmanager:UntagResource
-
-                Resource:
-                  Fn::ImportValue: CloudMart-DatabaseSecretArn
 
 
               # ==================================================
