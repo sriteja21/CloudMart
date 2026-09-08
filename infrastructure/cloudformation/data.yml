@@ -33,12 +33,6 @@ Parameters:
     Default: db.t3.micro
     Description: RDS MySQL instance class for development
 
-  RetainLegacySecret:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: Temporary compatibility export used during Secrets Manager migration
-
   DBAllocatedStorage:
     Type: Number
     Default: 20
@@ -46,32 +40,11 @@ Parameters:
     MinValue: 20
 
 
-Conditions:
-  RetainLegacySecret: !Equals [!Ref RetainLegacySecret, 'true']
-
 # ==========================================================
 # RESOURCES
 # ==========================================================
 
 Resources:
-
-  # ========================================================
-  # LEGACY SECRETS MANAGER SECRET - MIGRATION ONLY
-  # ========================================================
-
-  CloudMartDatabaseSecret:
-    Condition: RetainLegacySecret
-    Type: AWS::SecretsManager::Secret
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Description: Temporary legacy CloudMart RDS credentials secret during SSM migration
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"cloudmartadmin"}'
-        GenerateStringKey: password
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-
 
   # ========================================================
   # RDS SUBNET GROUP
@@ -232,13 +205,6 @@ Outputs:
   # --------------------------------------------------------
   # DATABASE SUBNET GROUP
   # --------------------------------------------------------
-
-  DatabaseSecretArnLegacy:
-    Condition: RetainLegacySecret
-    Description: Temporary legacy export retained only during Secrets Manager migration
-    Value: !Ref CloudMartDatabaseSecret
-    Export:
-      Name: CloudMart-DatabaseSecretArn
 
   DatabaseSubnetGroup:
 
