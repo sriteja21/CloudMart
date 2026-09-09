@@ -4,20 +4,90 @@ import boto3
 ssm = boto3.client("ssm")
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
-TOKEN_PARAMETER = f"/app/{ENVIRONMENT}/auth/token"
+
+TOKEN_PARAMETERS = {
+    "USER": f"/app/{ENVIRONMENT}/auth/user-token",
+    "PRODUCT_OWNER": f"/app/{ENVIRONMENT}/auth/product-owner-token",
+    "ADMIN": f"/app/{ENVIRONMENT}/auth/admin-token"
+}
+
+PERMISSIONS = {
+    "USER": {
+        "GET": [
+            "/customer",
+            "/customer/",
+            "/order",
+            "/order/",
+            "/order/customer/"
+        ],
+        "POST": [
+            "/order",
+            "/order/"
+        ]
+    },
+    "PRODUCT_OWNER": {
+        "GET": [
+            "/product",
+            "/product/",
+            "/order",
+            "/order/",
+            "/order/customer/"
+        ],
+        "POST": [
+            "/product"
+        ],
+        "PUT": [
+            "/product/"
+        ],
+        "DELETE": [
+            "/product/"
+        ]
+    },
+    "ADMIN": {
+        "*": ["*"]
+    }
+}
 
 
-def get_expected_token():
-    response = ssm.get_parameter(
-        Name=TOKEN_PARAMETER,
+def get_tokens():
+    response = ssm.get_parameters(
+        Names=list(TOKEN_PARAMETERS.values()),
         WithDecryption=True
     )
 
-    return response["Parameter"]["Value"]
+    tokens = {}
+
+    for parameter in response["Parameters"]:
+        for role, parameter_name in TOKEN_PARAMETERS.items():
+            if parameter["Name"] == parameter_name:
+                tokens[parameter["Value"]] = role
+
+    return tokens
+
+
+def get_role(token):
+    tokens = get_tokens()
+    return tokens.get(token)
+
+
+def is_authorized(role, method, path):
+    if role == "ADMIN":
+        return True
+
+    role_permissions = PERMISSIONS.get(role, {})
+    allowed_paths = role_permissions.get(method, [])
+
+    for allowed_path in allowed_paths:
+        if path == allowed_path:
+            return True
+
+        if allowed_path.endswith("/") and path.startswith(allowed_path):
+            return True
+
+    return False
 
 
 def lambda_handler(event, context):
-
     try:
         headers = event.get("headers") or {}
 
@@ -28,7 +98,7 @@ def lambda_handler(event, context):
 
         if not authorization_header:
             return generate_policy(
-                "anonymous",
+                "unauthorized",
                 "Deny",
                 event
             )
@@ -37,30 +107,41 @@ def lambda_handler(event, context):
 
         if len(parts) != 2:
             return generate_policy(
-                "anonymous",
+                "unauthorized",
                 "Deny",
                 event
             )
 
         if parts[0].lower() != "bearer":
             return generate_policy(
-                "anonymous",
+                "unauthorized",
                 "Deny",
                 event
             )
 
         client_token = parts[1]
-        expected_token = get_expected_token()
 
-        if client_token == expected_token:
+        role = get_role(client_token)
+
+        if not role:
             return generate_policy(
-                "cloudmart-user",
+                "unauthorized",
+                "Deny",
+                event
+            )
+
+        method = event.get("httpMethod", "").upper()
+        path = event.get("path", "")
+
+        if is_authorized(role, method, path):
+            return generate_policy(
+                role.lower(),
                 "Allow",
                 event
             )
 
         return generate_policy(
-            "anonymous",
+            role.lower(),
             "Deny",
             event
         )
@@ -69,19 +150,17 @@ def lambda_handler(event, context):
         print(f"Authorizer error: {error}")
 
         return generate_policy(
-            "anonymous",
+            "unauthorized",
             "Deny",
             event
         )
 
 
 def generate_policy(principal_id, effect, event):
-
     method_arn = event.get("methodArn", "*")
 
     if method_arn == "*":
         resource = "*"
-
     else:
         arn_parts = method_arn.split("/")
 
