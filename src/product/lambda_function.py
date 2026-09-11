@@ -949,3 +949,5 @@ def lambda_handler(event, context):
             "========== PRODUCT LAMBDA REQUEST END: status=500 =========="
         )
         return result
+    _connection = None
+    print("_connection")
