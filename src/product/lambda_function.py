@@ -24,7 +24,6 @@ PARAMS = {
     "password": f"/app/{ENV}/database/password",
 }
 
-_connection = None
 
 
 def parameter(name):
@@ -140,28 +139,11 @@ def initialize_database(c):
 
 
 def db():
-    global _connection
-
-    logger.info("Database connection requested")
-
-    if _connection:
-        try:
-            _connection.ping(reconnect=True)
-            logger.info("Existing database connection is healthy")
-            return _connection
-        except Exception:
-            logger.exception("Existing database connection is unhealthy")
-            try:
-                _connection.close()
-            except Exception:
-                pass
-            _connection = None
-
     logger.info("Creating new database connection")
     c = config()
-    _connection = initialize_database(c)
+    connection = initialize_database(c)
     logger.info("New database connection ready")
-    return _connection
+    return connection
 
 
 def response(status, body):
@@ -949,5 +931,3 @@ def lambda_handler(event, context):
             "========== PRODUCT LAMBDA REQUEST END: status=500 =========="
         )
         return result
-    _connection = None
-    print("_connection")
