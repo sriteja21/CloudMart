@@ -14,6 +14,8 @@ TOKEN_PARAMETERS = {
 PERMISSIONS = {
     "USER": {
         "GET": [
+            "/product",
+            "/product/",
             "/customer",
             "/customer/",
             "/order",
