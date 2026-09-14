@@ -1247,3 +1247,5 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.exception("Unhandled API error request_id=%s error=%s", request_id, str(e))
         return response(500, {"message": "The operation failed unexpectedly. Check CloudWatch logs using the request ID for the detailed error.", "request_id": request_id})
+
+

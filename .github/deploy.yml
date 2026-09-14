@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - roles
 
   workflow_dispatch:
 
