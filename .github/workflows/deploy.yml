@@ -201,7 +201,7 @@ jobs:
   # ==========================================================
   auth:
     name: Auth
-    needs: [iam, database-cleanup]
+    needs: iam
     runs-on: ubuntu-latest
 
     steps:
