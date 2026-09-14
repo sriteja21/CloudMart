@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - roles
 
   workflow_dispatch:
 
@@ -194,40 +195,9 @@ jobs:
           echo "IAM exports verified"
 
 
-  # ==========================================================
-  # 5. REMOVE LEGACY SECRETS MANAGER EXPORT
-  # ==========================================================
-  database-cleanup:
-    name: Database Cleanup
-    needs: iam
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Remove Legacy Database Secret Export
-        run: |
-          aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/data.yml \
-            --stack-name cloudmart-data \
-            --region "$AWS_REGION" \
-            --parameter-overrides \
-              DBPassword="${{ secrets.DB_PASSWORD }}" \
-              RetainLegacySecretExport=false \
-            --no-fail-on-empty-changeset
-
-          echo "Legacy DatabaseSecretArn export removed"
-
 
   # ==========================================================
-  # 6. AUTH
+  # 5. AUTH
   # ==========================================================
   auth:
     name: Auth
@@ -281,7 +251,7 @@ jobs:
 
 
   # ==========================================================
-  # 7. EVENT DRIVEN
+  # 6. EVENT DRIVEN
   # ==========================================================
   event-driven:
     name: Event Driven
@@ -356,10 +326,10 @@ jobs:
 
 
   # ==========================================================
-  # 8. APPLICATION / PRODUCT + ORDER API
+  # 7. APPLICATION / PRODUCT + ORDER API
   # ==========================================================
   application:
-    name: Product API
+    name: Application stack
     needs: event-driven
     runs-on: ubuntu-latest
 

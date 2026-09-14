@@ -15,6 +15,7 @@ VALID_ROLES = {"USER", "PRODUCT_OWNER", "ADMIN"}
 
 VALID_ORDER_STATUSES = {
     "PENDING",
+    "FAILED",
     "CONFIRMED",
     "PROCESSING",
     "SHIPPED",
@@ -23,7 +24,8 @@ VALID_ORDER_STATUSES = {
 }
 
 ORDER_STATUS_TRANSITIONS = {
-    "PENDING": {"CONFIRMED", "CANCELLED"},
+    "PENDING": {"CONFIRMED", "FAILED", "CANCELLED"},
+    "FAILED": set(),
     "CONFIRMED": {"PROCESSING", "CANCELLED"},
     "PROCESSING": {"SHIPPED"},
     "SHIPPED": {"DELIVERED"},
@@ -52,7 +54,9 @@ def log_endpoint(func):
             logging.getLogger().info(
                 "END function=%s status=%s duration_ms=%.2f",
                 func.__name__,
-                result.get("statusCode") if isinstance(result, dict) else None,
+                result.get("statusCode")
+                if isinstance(result, dict)
+                else None,
                 (time.time() - start) * 1000
             )
 
@@ -71,9 +75,13 @@ def log_endpoint(func):
 
 def hash_token(token):
     if not token or not isinstance(token, str):
-        raise ValueError("Customer token must be a non-empty string.")
+        raise ValueError(
+            "Customer token must be a non-empty string."
+        )
 
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
 
 
 def get_environment():
@@ -108,10 +116,14 @@ def get_db_connection():
     parameters = result.get("Parameters", [])
 
     if len(parameters) != len(names):
-        found = {item["Name"] for item in parameters}
+        found = {
+            item["Name"]
+            for item in parameters
+        }
 
         missing = [
-            name for name in names
+            name
+            for name in names
             if name not in found
         ]
 
@@ -144,10 +156,15 @@ def response(status, data):
         "headers": {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type,Authorization",
-            "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            "Access-Control-Allow-Headers":
+                "Content-Type,Authorization",
+            "Access-Control-Allow-Methods":
+                "GET,POST,PUT,PATCH,DELETE,OPTIONS"
         },
-        "body": json.dumps(data, default=str)
+        "body": json.dumps(
+            data,
+            default=str
+        )
     }
 
 
@@ -167,10 +184,14 @@ def parse_body(event):
 
 
 def get_path_id(event, name):
-    value = (event.get("pathParameters") or {}).get("id")
+    value = (
+        event.get("pathParameters") or {}
+    ).get("id")
 
     if not value or not str(value).isdigit():
-        raise ValueError(f"{name} ID must be a valid integer.")
+        raise ValueError(
+            f"{name} ID must be a valid integer."
+        )
 
     return int(value)
 
@@ -183,16 +204,22 @@ def get_authorizer_context(event):
     )
 
     if not context:
-        raise PermissionError("Authorization context is missing.")
+        raise PermissionError(
+            "Authorization context is missing."
+        )
 
     customer_id = context.get("customer_id")
     role = context.get("role")
 
     if not customer_id or not str(customer_id).isdigit():
-        raise PermissionError("Authenticated customer identity is missing.")
+        raise PermissionError(
+            "Authenticated customer identity is missing."
+        )
 
     if role not in VALID_ROLES:
-        raise PermissionError("Authenticated customer role is invalid.")
+        raise PermissionError(
+            "Authenticated customer role is invalid."
+        )
 
     return int(customer_id), role
 
@@ -201,7 +228,9 @@ def require_admin(event):
     customer_id, role = get_authorizer_context(event)
 
     if role != "ADMIN":
-        raise PermissionError("Administrator access is required.")
+        raise PermissionError(
+            "Administrator access is required."
+        )
 
     return customer_id, role
 
@@ -209,7 +238,10 @@ def require_admin(event):
 def require_product_owner_or_admin(event):
     customer_id, role = get_authorizer_context(event)
 
-    if role not in {"PRODUCT_OWNER", "ADMIN"}:
+    if role not in {
+        "PRODUCT_OWNER",
+        "ADMIN"
+    }:
         raise PermissionError(
             "Product owner or administrator access is required."
         )
@@ -233,7 +265,10 @@ def publish_event(event_type, detail):
     logger = logging.getLogger()
 
     environment = get_environment()
-    event_bus = f"cloudmart-{environment}-event-bus"
+
+    event_bus = (
+        f"cloudmart-{environment}-event-bus"
+    )
 
     events = boto3.client("events")
 
@@ -244,14 +279,18 @@ def publish_event(event_type, detail):
                     "EventBusName": event_bus,
                     "Source": "cloudmart.order",
                     "DetailType": event_type,
-                    "Detail": json.dumps(detail, default=str)
+                    "Detail": json.dumps(
+                        detail,
+                        default=str
+                    )
                 }
             ]
         )
 
         if result.get("FailedEntryCount", 0) > 0:
             logger.error(
-                "EventBridge publish failed event_type=%s result=%s",
+                "EventBridge publish failed "
+                "event_type=%s result=%s",
                 event_type,
                 result
             )
@@ -260,7 +299,8 @@ def publish_event(event_type, detail):
 
     except Exception:
         logger.exception(
-            "EventBridge publish exception event_type=%s",
+            "EventBridge publish exception "
+            "event_type=%s",
             event_type
         )
         raise
@@ -270,18 +310,28 @@ def publish_event(event_type, detail):
 def create_customer(event):
     data = parse_body(event)
 
-    email = str(data.get("email", "")).strip()
-    name = str(data.get("name", "")).strip()
+    email = str(
+        data.get("email", "")
+    ).strip()
+
+    name = str(
+        data.get("name", "")
+    ).strip()
 
     if not email:
-        raise ValueError("Customer email is required.")
+        raise ValueError(
+            "Customer email is required."
+        )
 
     if not name:
-        raise ValueError("Customer name is required.")
+        raise ValueError(
+            "Customer name is required."
+        )
 
     if "token_hash" in data:
         raise ValueError(
-            "token_hash must not be provided. Send token instead."
+            "token_hash must not be provided. "
+            "Send token instead."
         )
 
     if "role" in data:
@@ -325,9 +375,12 @@ def create_customer(event):
         conn.commit()
 
         result = {
-            "message": "Customer created successfully.",
-            "customer_id": customer_id,
-            "role": "USER"
+            "message":
+                "Customer created successfully.",
+            "customer_id":
+                customer_id,
+            "role":
+                "USER"
         }
 
         if generated_token:
@@ -337,16 +390,20 @@ def create_customer(event):
                 "It will not be returned again."
             )
 
-        return response(201, result)
+        return response(
+            201,
+            result
+        )
 
     except pymysql.IntegrityError:
         conn.rollback()
+
         return response(
             409,
             {
                 "message":
-                "Customer could not be created because "
-                "the email or token already exists."
+                    "Customer could not be created because "
+                    "the email or token already exists."
             }
         )
 
@@ -395,7 +452,10 @@ def list_customers(event):
 
 @log_endpoint
 def get_customer(event):
-    customer_id = get_path_id(event, "Customer")
+    customer_id = get_path_id(
+        event,
+        "Customer"
+    )
 
     require_own_customer(
         event,
@@ -427,14 +487,16 @@ def get_customer(event):
             return response(
                 404,
                 {
-                    "message": "Customer not found."
+                    "message":
+                        "Customer not found."
                 }
             )
 
         return response(
             200,
             {
-                "customer": customer
+                "customer":
+                    customer
             }
         )
 
@@ -444,12 +506,19 @@ def get_customer(event):
 
 @log_endpoint
 def update_customer(event):
-    customer_id = get_path_id(event, "Customer")
+    customer_id = get_path_id(
+        event,
+        "Customer"
+    )
+
     data = parse_body(event)
 
     authenticated_id, role = get_authorizer_context(event)
 
-    if role != "ADMIN" and authenticated_id != customer_id:
+    if (
+        role != "ADMIN"
+        and authenticated_id != customer_id
+    ):
         raise PermissionError(
             "You are not authorized to update this customer."
         )
@@ -458,7 +527,9 @@ def update_customer(event):
     values = []
 
     if "name" in data:
-        name = str(data["name"]).strip()
+        name = str(
+            data["name"]
+        ).strip()
 
         if not name:
             raise ValueError(
@@ -469,7 +540,9 @@ def update_customer(event):
         values.append(name)
 
     if "email" in data:
-        email = str(data["email"]).strip()
+        email = str(
+            data["email"]
+        ).strip()
 
         if not email:
             raise ValueError(
@@ -481,7 +554,8 @@ def update_customer(event):
 
     if "token_hash" in data:
         raise ValueError(
-            "token_hash must not be provided. Send token instead."
+            "token_hash must not be provided. "
+            "Send token instead."
         )
 
     if "token" in data:
@@ -493,7 +567,9 @@ def update_customer(event):
             )
 
         fields.append("token_hash=%s")
-        values.append(hash_token(token))
+        values.append(
+            hash_token(token)
+        )
 
     if "role" in data:
         if role != "ADMIN":
@@ -501,12 +577,16 @@ def update_customer(event):
                 "Only administrators can change customer roles."
             )
 
-        new_role = str(data["role"]).strip().upper()
+        new_role = str(
+            data["role"]
+        ).strip().upper()
 
         if new_role not in VALID_ROLES:
             raise ValueError(
                 "Invalid role. Allowed roles: "
-                + ", ".join(sorted(VALID_ROLES))
+                + ", ".join(
+                    sorted(VALID_ROLES)
+                )
             )
 
         fields.append("role=%s")
@@ -536,7 +616,8 @@ def update_customer(event):
                 return response(
                     404,
                     {
-                        "message": "Customer not found."
+                        "message":
+                            "Customer not found."
                     }
                 )
 
@@ -554,8 +635,10 @@ def update_customer(event):
         return response(
             200,
             {
-                "message": "Customer updated successfully.",
-                "customer_id": customer_id
+                "message":
+                    "Customer updated successfully.",
+                "customer_id":
+                    customer_id
             }
         )
 
@@ -566,8 +649,8 @@ def update_customer(event):
             409,
             {
                 "message":
-                "Customer could not be updated because "
-                "the email or token already exists."
+                    "Customer could not be updated because "
+                    "the email or token already exists."
             }
         )
 
@@ -581,7 +664,10 @@ def update_customer(event):
 
 @log_endpoint
 def delete_customer(event):
-    customer_id = get_path_id(event, "Customer")
+    customer_id = get_path_id(
+        event,
+        "Customer"
+    )
 
     require_admin(event)
 
@@ -602,7 +688,8 @@ def delete_customer(event):
                 return response(
                     404,
                     {
-                        "message": "Customer not found."
+                        "message":
+                            "Customer not found."
                     }
                 )
 
@@ -619,8 +706,10 @@ def delete_customer(event):
         return response(
             200,
             {
-                "message": "Customer deleted successfully.",
-                "customer_id": customer_id
+                "message":
+                    "Customer deleted successfully.",
+                "customer_id":
+                    customer_id
             }
         )
 
@@ -630,7 +719,8 @@ def delete_customer(event):
         return response(
             409,
             {
-                "message": "Customer has existing orders."
+                "message":
+                    "Customer has existing orders."
             }
         )
 
@@ -655,6 +745,7 @@ def create_order(event):
 
     if role == "USER":
         customer_id = authenticated_id
+
     else:
         if "customer_id" not in data:
             raise ValueError(
@@ -662,13 +753,71 @@ def create_order(event):
             )
 
         try:
-            customer_id = int(data["customer_id"])
+            customer_id = int(
+                data["customer_id"]
+            )
         except (TypeError, ValueError):
             raise ValueError(
                 "customer_id must be a valid integer."
             )
 
+    normalized_items = {}
+
+    for index, item in enumerate(
+        data["items"],
+        start=1
+    ):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"Order item {index} must be a JSON object."
+            )
+
+        if "product_id" not in item:
+            raise ValueError(
+                f"Order item {index} requires product_id."
+            )
+
+        if "quantity" not in item:
+            raise ValueError(
+                f"Order item {index} requires quantity."
+            )
+
+        try:
+            product_id = int(
+                item["product_id"]
+            )
+
+            quantity = int(
+                item["quantity"]
+            )
+
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Order item {index} contains an invalid integer."
+            )
+
+        if product_id <= 0:
+            raise ValueError(
+                f"Order item {index} product_id "
+                "must be greater than 0."
+            )
+
+        if quantity <= 0:
+            raise ValueError(
+                f"Order item {index} quantity "
+                "must be greater than 0."
+            )
+
+        normalized_items[product_id] = (
+            normalized_items.get(
+                product_id,
+                0
+            )
+            + quantity
+        )
+
     conn = get_db_connection()
+
     order_id = None
 
     try:
@@ -692,7 +841,7 @@ def create_order(event):
                     404,
                     {
                         "message":
-                        f"Customer {customer_id} not found."
+                            f"Customer {customer_id} not found."
                     }
                 )
 
@@ -711,44 +860,48 @@ def create_order(event):
             )
 
             order_id = cur.lastrowid
-            order_number = f"ORD-{order_id:06d}"
 
+            order_number = (
+                f"ORD-{order_id:06d}"
+            )
+
+            cur.execute(
+                """
+                UPDATE orders
+                SET order_number=%s
+                WHERE order_id=%s
+                """,
+                (
+                    order_number,
+                    order_id
+                )
+            )
+
+            cur.execute(
+                """
+                INSERT INTO order_logs
+                (
+                    order_id,
+                    event_type,
+                    old_status,
+                    new_status,
+                    message
+                )
+                VALUES (%s,%s,%s,%s,%s)
+                """,
+                (
+                    order_id,
+                    "CREATED",
+                    None,
+                    "PENDING",
+                    "Order created and inventory validation started"
+                )
+            )
+
+            products = []
             total = Decimal("0.00")
-            order_items = []
 
-            for index, item in enumerate(
-                data["items"],
-                start=1
-            ):
-                if not isinstance(item, dict):
-                    raise ValueError(
-                        f"Order item {index} must be a JSON object."
-                    )
-
-                if "product_id" not in item:
-                    raise ValueError(
-                        f"Order item {index} requires product_id."
-                    )
-
-                if "quantity" not in item:
-                    raise ValueError(
-                        f"Order item {index} requires quantity."
-                    )
-
-                try:
-                    product_id = int(item["product_id"])
-                    quantity = int(item["quantity"])
-                except (TypeError, ValueError):
-                    raise ValueError(
-                        f"Order item {index} contains an invalid integer."
-                    )
-
-                if quantity <= 0:
-                    raise ValueError(
-                        f"Order item {index} quantity "
-                        "must be greater than 0."
-                    )
-
+            for product_id, quantity in normalized_items.items():
                 cur.execute(
                     """
                     SELECT
@@ -778,19 +931,145 @@ def create_order(event):
                     product["quantity_available"]
                 )
 
-                if quantity > available:
-                    raise ValueError(
-                        f"Insufficient stock for product "
-                        f"'{product['name']}'. Requested {quantity}, "
-                        f"but only {available} is available."
-                    )
-
                 unit_price = Decimal(
                     str(product["price"])
                 )
 
-                item_total = unit_price * quantity
+                item_total = (
+                    unit_price * quantity
+                )
+
                 total += item_total
+
+                products.append(
+                    {
+                        "product_id":
+                            product_id,
+                        "product_name":
+                            product["name"],
+                        "quantity":
+                            quantity,
+                        "unit_price":
+                            unit_price,
+                        "total_price":
+                            item_total,
+                        "available":
+                            available
+                    }
+                )
+
+            failed_product = None
+
+            for product in products:
+                if (
+                    product["quantity"]
+                    > product["available"]
+                ):
+                    failed_product = product
+                    break
+
+            if failed_product:
+                reason = (
+                    f"Insufficient stock for product "
+                    f"'{failed_product['product_name']}'. "
+                    f"Requested "
+                    f"{failed_product['quantity']}, "
+                    f"but only "
+                    f"{failed_product['available']} "
+                    f"is available."
+                )
+
+                cur.execute(
+                    """
+                    UPDATE orders
+                    SET
+                        status='FAILED',
+                        total_amount=0
+                    WHERE order_id=%s
+                    """,
+                    (order_id,)
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO order_logs
+                    (
+                        order_id,
+                        event_type,
+                        old_status,
+                        new_status,
+                        message
+                    )
+                    VALUES (%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        order_id,
+                        "STATUS_CHANGED",
+                        "PENDING",
+                        "FAILED",
+                        reason
+                    )
+                )
+
+                conn.commit()
+
+                try:
+                    publish_event(
+                        "Order Failed",
+                        {
+                            "order_id":
+                                order_id,
+                            "order_number":
+                                order_number,
+                            "customer": {
+                                "customer_id":
+                                    customer["customer_id"],
+                                "name":
+                                    customer["name"],
+                                "email":
+                                    customer["email"]
+                            },
+                            "previous_status":
+                                "PENDING",
+                            "status":
+                                "FAILED",
+                            "reason":
+                                reason
+                        }
+                    )
+
+                except Exception:
+                    logging.getLogger().exception(
+                        "Failed order committed but "
+                        "event publishing failed."
+                    )
+
+                return response(
+                    201,
+                    {
+                        "message":
+                            "Order creation failed.",
+                        "order_id":
+                            order_id,
+                        "order_number":
+                            order_number,
+                        "status":
+                            "FAILED",
+                        "reason":
+                            reason
+                    }
+                )
+
+            order_items = []
+
+            for product in products:
+                product_id = (
+                    product["product_id"]
+                )
+
+                quantity = (
+                    product["quantity"]
+                )
 
                 cur.execute(
                     """
@@ -808,8 +1087,8 @@ def create_order(event):
                         order_id,
                         product_id,
                         quantity,
-                        unit_price,
-                        item_total
+                        product["unit_price"],
+                        product["total_price"]
                     )
                 )
 
@@ -844,7 +1123,9 @@ def create_order(event):
                     (product_id,)
                 )
 
-                inventory_after = cur.fetchone()
+                inventory_after = (
+                    cur.fetchone()
+                )
 
                 if not inventory_after:
                     raise RuntimeError(
@@ -853,14 +1134,20 @@ def create_order(event):
                     )
 
                 after_quantity = int(
-                    inventory_after["quantity_available"]
+                    inventory_after[
+                        "quantity_available"
+                    ]
                 )
 
                 expected_quantity = (
-                    available - quantity
+                    product["available"]
+                    - quantity
                 )
 
-                if after_quantity != expected_quantity:
+                if (
+                    after_quantity
+                    != expected_quantity
+                ):
                     raise RuntimeError(
                         f"Inventory verification failed for "
                         f"product {product_id}."
@@ -868,11 +1155,16 @@ def create_order(event):
 
                 order_items.append(
                     {
-                        "product_id": product_id,
-                        "product_name": product["name"],
-                        "quantity": quantity,
-                        "unit_price": unit_price,
-                        "total_price": item_total
+                        "product_id":
+                            product_id,
+                        "product_name":
+                            product["product_name"],
+                        "quantity":
+                            quantity,
+                        "unit_price":
+                            product["unit_price"],
+                        "total_price":
+                            product["total_price"]
                     }
                 )
 
@@ -880,12 +1172,11 @@ def create_order(event):
                 """
                 UPDATE orders
                 SET
-                    order_number=%s,
+                    status='CONFIRMED',
                     total_amount=%s
                 WHERE order_id=%s
                 """,
                 (
-                    order_number,
                     total,
                     order_id
                 )
@@ -905,10 +1196,10 @@ def create_order(event):
                 """,
                 (
                     order_id,
-                    "CREATED",
-                    None,
+                    "STATUS_CHANGED",
                     "PENDING",
-                    "Order created successfully"
+                    "CONFIRMED",
+                    "Order confirmed and inventory reserved successfully"
                 )
             )
 
@@ -916,10 +1207,12 @@ def create_order(event):
 
         try:
             publish_event(
-                "Order Created",
+                "Order Confirmed",
                 {
-                    "order_id": order_id,
-                    "order_number": order_number,
+                    "order_id":
+                        order_id,
+                    "order_number":
+                        order_number,
                     "customer": {
                         "customer_id":
                             customer["customer_id"],
@@ -928,25 +1221,38 @@ def create_order(event):
                         "email":
                             customer["email"]
                     },
-                    "status": "PENDING",
-                    "items": order_items,
-                    "total_amount": total
+                    "previous_status":
+                        "PENDING",
+                    "status":
+                        "CONFIRMED",
+                    "items":
+                        order_items,
+                    "total_amount":
+                        total
                 }
             )
+
         except Exception:
             logging.getLogger().exception(
-                "Order committed but event publishing failed."
+                "Confirmed order committed but "
+                "event publishing failed."
             )
 
         return response(
             201,
             {
-                "message": "Order created successfully.",
-                "order_id": order_id,
-                "order_number": order_number,
-                "status": "PENDING",
-                "total_amount": total,
-                "items": order_items
+                "message":
+                    "Order created successfully.",
+                "order_id":
+                    order_id,
+                "order_number":
+                    order_number,
+                "status":
+                    "CONFIRMED",
+                "total_amount":
+                    total,
+                "items":
+                    order_items
             }
         )
 
@@ -983,6 +1289,7 @@ def list_orders(event):
                     """,
                     (authenticated_id,)
                 )
+
             else:
                 cur.execute(
                     """
@@ -1004,7 +1311,8 @@ def list_orders(event):
         return response(
             200,
             {
-                "orders": orders
+                "orders":
+                    orders
             }
         )
 
@@ -1014,7 +1322,10 @@ def list_orders(event):
 
 @log_endpoint
 def list_customer_orders(event):
-    customer_id = get_path_id(event, "Customer")
+    customer_id = get_path_id(
+        event,
+        "Customer"
+    )
 
     require_own_customer(
         event,
@@ -1038,7 +1349,8 @@ def list_customer_orders(event):
                 return response(
                     404,
                     {
-                        "message": "Customer not found."
+                        "message":
+                            "Customer not found."
                     }
                 )
 
@@ -1064,7 +1376,8 @@ def list_customer_orders(event):
         return response(
             200,
             {
-                "orders": orders
+                "orders":
+                    orders
             }
         )
 
@@ -1074,7 +1387,10 @@ def list_customer_orders(event):
 
 @log_endpoint
 def get_order(event):
-    order_id = get_path_id(event, "Order")
+    order_id = get_path_id(
+        event,
+        "Order"
+    )
 
     authenticated_id, role = get_authorizer_context(event)
 
@@ -1108,14 +1424,16 @@ def get_order(event):
                 return response(
                     404,
                     {
-                        "message": "Order not found."
+                        "message":
+                            "Order not found."
                     }
                 )
 
             if (
                 role != "ADMIN"
                 and role != "PRODUCT_OWNER"
-                and order["customer_id"] != authenticated_id
+                and order["customer_id"]
+                    != authenticated_id
             ):
                 raise PermissionError(
                     "You are not authorized to access this order."
@@ -1162,7 +1480,8 @@ def get_order(event):
         return response(
             200,
             {
-                "order": order
+                "order":
+                    order
             }
         )
 
@@ -1174,11 +1493,17 @@ def get_order(event):
 def update_order(event):
     require_product_owner_or_admin(event)
 
-    order_id = get_path_id(event, "Order")
+    order_id = get_path_id(
+        event,
+        "Order"
+    )
+
     data = parse_body(event)
 
     if not data.get("status"):
-        raise ValueError("status is required.")
+        raise ValueError(
+            "status is required."
+        )
 
     new_status = str(
         data["status"]
@@ -1192,7 +1517,9 @@ def update_order(event):
     if new_status not in VALID_ORDER_STATUSES:
         raise ValueError(
             "Invalid order status. Allowed statuses: "
-            + ", ".join(sorted(VALID_ORDER_STATUSES))
+            + ", ".join(
+                sorted(VALID_ORDER_STATUSES)
+            )
         )
 
     conn = get_db_connection()
@@ -1222,15 +1549,18 @@ def update_order(event):
                 return response(
                     404,
                     {
-                        "message": "Order not found."
+                        "message":
+                            "Order not found."
                     }
                 )
 
             old_status = order["status"]
 
-            if new_status not in ORDER_STATUS_TRANSITIONS.get(
-                old_status,
-                set()
+            if new_status not in (
+                ORDER_STATUS_TRANSITIONS.get(
+                    old_status,
+                    set()
+                )
             ):
                 raise ValueError(
                     f"Cannot change order status "
@@ -1277,7 +1607,8 @@ def update_order(event):
             publish_event(
                 f"Order {new_status.title()}",
                 {
-                    "order_id": order_id,
+                    "order_id":
+                        order_id,
                     "order_number":
                         order["order_number"],
                     "customer": {
@@ -1294,9 +1625,11 @@ def update_order(event):
                         new_status
                 }
             )
+
         except Exception:
             logging.getLogger().exception(
-                "Order status changed but event publishing failed."
+                "Order status changed but "
+                "event publishing failed."
             )
 
         return response(
@@ -1325,12 +1658,18 @@ def update_order(event):
 def cancel_order(event):
     authenticated_id, role = get_authorizer_context(event)
 
-    order_id = get_path_id(event, "Order")
+    order_id = get_path_id(
+        event,
+        "Order"
+    )
 
     data = parse_body(event)
 
     requested_status = str(
-        data.get("status", "CANCELLED")
+        data.get(
+            "status",
+            "CANCELLED"
+        )
     ).strip().upper()
 
     if requested_status != "CANCELLED":
@@ -1366,14 +1705,16 @@ def cancel_order(event):
                 return response(
                     404,
                     {
-                        "message": "Order not found."
+                        "message":
+                            "Order not found."
                     }
                 )
 
             if (
                 role != "ADMIN"
                 and role != "PRODUCT_OWNER"
-                and order["customer_id"] != authenticated_id
+                and order["customer_id"]
+                    != authenticated_id
             ):
                 raise PermissionError(
                     "You are not authorized to cancel this order."
@@ -1386,7 +1727,7 @@ def cancel_order(event):
                     400,
                     {
                         "message":
-                        "Order is already cancelled."
+                            "Order is already cancelled."
                     }
                 )
 
@@ -1398,8 +1739,17 @@ def cancel_order(event):
                     400,
                     {
                         "message":
-                        f"Cannot cancel an order with status "
-                        f"{current_status}."
+                            f"Cannot cancel an order with status "
+                            f"{current_status}."
+                    }
+                )
+
+            if current_status == "FAILED":
+                return response(
+                    400,
+                    {
+                        "message":
+                            "A failed order cannot be cancelled."
                     }
                 )
 
@@ -1473,7 +1823,8 @@ def cancel_order(event):
             publish_event(
                 "Order Cancelled",
                 {
-                    "order_id": order_id,
+                    "order_id":
+                        order_id,
                     "order_number":
                         order["order_number"],
                     "customer": {
@@ -1490,6 +1841,7 @@ def cancel_order(event):
                         "CANCELLED"
                 }
             )
+
         except Exception:
             logging.getLogger().exception(
                 "Order cancelled but event publishing failed."
@@ -1519,96 +1871,106 @@ def cancel_order(event):
 
 
 @log_endpoint
-def delete_order(event):
-    require_admin(event)
-
-    order_id = get_path_id(event, "Order")
-
-    conn = get_db_connection()
-
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT status
-                FROM orders
-                WHERE order_id=%s
-                """,
-                (order_id,)
-            )
-
-            order = cur.fetchone()
-
-            if not order:
-                return response(
-                    404,
-                    {
-                        "message": "Order not found."
-                    }
-                )
-
-        return cancel_order(event)
-
-    finally:
-        conn.close()
-
-
-@log_endpoint
 def lambda_handler(event, context):
     request_id = (
-        getattr(context, "aws_request_id", "unknown")
+        getattr(
+            context,
+            "aws_request_id",
+            "unknown"
+        )
         if context
         else "unknown"
     )
 
-    method = event.get("httpMethod", "").upper()
-    path = event.get("path", "")
+    method = event.get(
+        "httpMethod",
+        ""
+    ).upper()
+
+    path = event.get(
+        "path",
+        ""
+    )
 
     try:
         if method == "OPTIONS":
-            return response(204, {})
+            return response(
+                204,
+                {}
+            )
 
-        if method == "POST" and path.endswith("/customer"):
+        if (
+            method == "POST"
+            and path.endswith("/customer")
+        ):
             return create_customer(event)
 
-        if method == "GET" and path.endswith("/customer"):
+        if (
+            method == "GET"
+            and path.endswith("/customer")
+        ):
             return list_customers(event)
 
-        if method == "GET" and "/customer/" in path:
+        if (
+            method == "GET"
+            and "/customer/" in path
+        ):
             return get_customer(event)
 
-        if method == "PUT" and "/customer/" in path:
+        if (
+            method == "PUT"
+            and "/customer/" in path
+        ):
             return update_customer(event)
 
-        if method == "DELETE" and "/customer/" in path:
+        if (
+            method == "DELETE"
+            and "/customer/" in path
+        ):
             return delete_customer(event)
 
-        if method == "POST" and path.endswith("/order"):
+        if (
+            method == "POST"
+            and path.endswith("/order")
+        ):
             return create_order(event)
 
-        if method == "GET" and path.endswith("/order"):
+        if (
+            method == "GET"
+            and path.endswith("/order")
+        ):
             return list_orders(event)
 
-        if method == "GET" and "/order/customer/" in path:
+        if (
+            method == "GET"
+            and "/order/customer/" in path
+        ):
             return list_customer_orders(event)
 
-        if method == "PATCH" and "/order/" in path:
+        if (
+            method == "PATCH"
+            and "/order/" in path
+        ):
             return cancel_order(event)
 
-        if method == "GET" and "/order/" in path:
+        if (
+            method == "GET"
+            and "/order/" in path
+        ):
             return get_order(event)
 
-        if method == "PUT" and "/order/" in path:
+        if (
+            method == "PUT"
+            and "/order/" in path
+        ):
             return update_order(event)
-
-        if method == "DELETE" and "/order/" in path:
-            return delete_order(event)
 
         return response(
             404,
             {
                 "message":
-                f"API route not found for {method} {path}."
+                    f"API route not found for "
+                    f"{method} {path}."
             }
         )
 
@@ -1616,7 +1978,8 @@ def lambda_handler(event, context):
         return response(
             403,
             {
-                "message": str(e)
+                "message":
+                    str(e)
             }
         )
 
@@ -1624,7 +1987,8 @@ def lambda_handler(event, context):
         return response(
             400,
             {
-                "message": str(e)
+                "message":
+                    str(e)
             }
         )
 
@@ -1633,7 +1997,7 @@ def lambda_handler(event, context):
             409,
             {
                 "message":
-                "Database constraint prevented the operation."
+                    "Database constraint prevented the operation."
             }
         )
 
@@ -1647,9 +2011,9 @@ def lambda_handler(event, context):
             500,
             {
                 "message":
-                "Database operation failed.",
+                    "Database operation failed.",
                 "request_id":
-                request_id
+                    request_id
             }
         )
 
@@ -1663,8 +2027,8 @@ def lambda_handler(event, context):
             500,
             {
                 "message":
-                "The operation failed unexpectedly.",
+                    "The operation failed unexpectedly.",
                 "request_id":
-                request_id
+                    request_id
             }
         )
