@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import hashlib
 import secrets
 import time
@@ -178,9 +179,18 @@ def parse_body(event):
         return data
 
     try:
-        return json.loads(data)
+        parsed = json.loads(data)
     except Exception:
-        raise ValueError("Invalid JSON body.")
+        raise ValueError(
+            "Request body contains invalid JSON."
+        )
+
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            "Request body must be a JSON object."
+        )
+
+    return parsed
 
 
 def get_path_id(event, name):
@@ -306,133 +316,109 @@ def publish_event(event_type, detail):
         raise
 
 
-def order_notification_detail(
-    order_id,
-    order_number,
-    customer,
-    status,
-    total_amount=None,
-    reason="",
-    message=""
-):
-    return {
-        "order_id": order_id,
-        "order_number": order_number,
-        "customer_id": customer["customer_id"],
-        "customer_name": customer["name"],
-        "customer_email": customer["email"],
-        "status": status,
-        "total_amount": total_amount if total_amount is not None else Decimal("0.00"),
-        "reason": reason,
-        "message": message
-    }
-
-
 @log_endpoint
 def create_customer(event):
     data = parse_body(event)
 
-    email = str(
-        data.get("email", "")
-    ).strip()
-
-    name = str(
-        data.get("name", "")
-    ).strip()
-
-    if not email:
+    allowed_fields = {"email", "name", "token"}
+    unexpected = set(data) - allowed_fields
+    if unexpected:
         raise ValueError(
-            "Customer email is required."
+            "Unsupported customer fields: "
+            + ", ".join(sorted(unexpected))
+            + "."
         )
 
-    if not name:
-        raise ValueError(
-            "Customer name is required."
-        )
+    email = data.get("email")
+    name = data.get("name")
 
-    if "token_hash" in data:
-        raise ValueError(
-            "token_hash must not be provided. "
-            "Send token instead."
-        )
+    if not isinstance(email, str) or not email.strip():
+        raise ValueError("Customer email is required.")
+    email = email.strip()
 
-    if "role" in data:
-        raise ValueError(
-            "Role cannot be assigned during customer registration."
-        )
+    if len(email) > 255 or not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise ValueError("Customer email must be a valid email address.")
+
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Customer name is required.")
+    name = name.strip()
+
+    if len(name) > 255:
+        raise ValueError("Customer name must not exceed 255 characters.")
 
     token = data.get("token")
     generated_token = False
 
-    if token is None or token == "":
+    if token is None:
         token = secrets.token_urlsafe(32)
         generated_token = True
+    elif not isinstance(token, str) or not token.strip():
+        raise ValueError("Customer token must be a non-empty string.")
+    else:
+        token = token.strip()
+
+    if len(token) < 8:
+        raise ValueError("Customer token must contain at least 8 characters.")
 
     token_hash = hash_token(token)
-
     conn = get_db_connection()
 
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                INSERT INTO customers
-                (
-                    email,
-                    name,
-                    token_hash,
-                    role
+                "SELECT customer_id FROM customers WHERE email=%s LIMIT 1",
+                (email,)
+            )
+            if cur.fetchone():
+                return response(
+                    409,
+                    {"message": "A customer with this email address already exists."}
                 )
+
+            cur.execute(
+                "SELECT customer_id FROM customers WHERE token_hash=%s LIMIT 1",
+                (token_hash,)
+            )
+            if cur.fetchone():
+                return response(
+                    409,
+                    {"message": "This customer token is already assigned to another customer."}
+                )
+
+            cur.execute(
+                """
+                INSERT INTO customers (email, name, token_hash, role)
                 VALUES (%s, %s, %s, 'USER')
                 """,
-                (
-                    email,
-                    name,
-                    token_hash
-                )
+                (email, name, token_hash)
             )
-
             customer_id = cur.lastrowid
 
         conn.commit()
 
         result = {
-            "message":
-                "Customer created successfully.",
-            "customer_id":
-                customer_id,
-            "role":
-                "USER"
+            "message": "Customer created successfully.",
+            "customer_id": customer_id,
+            "role": "USER"
         }
 
         if generated_token:
             result["token"] = token
             result["token_message"] = (
-                "Store this token securely. "
-                "It will not be returned again."
+                "Store this token securely. It will not be returned again."
             )
 
-        return response(
-            201,
-            result
-        )
+        return response(201, result)
 
     except pymysql.IntegrityError:
         conn.rollback()
-
         return response(
             409,
-            {
-                "message":
-                    "Customer could not be created because "
-                    "the email or token already exists."
-            }
+            {"message": "Customer could not be created because the email or token already exists."}
         )
-
     except Exception:
         conn.rollback()
         raise
-
     finally:
         conn.close()
 
@@ -528,128 +514,120 @@ def get_customer(event):
 
 @log_endpoint
 def update_customer(event):
-    customer_id = get_path_id(
-        event,
-        "Customer"
-    )
-
+    customer_id = get_path_id(event, "Customer")
     data = parse_body(event)
-
     authenticated_id, role = get_authorizer_context(event)
 
-    if (
-        role != "ADMIN"
-        and authenticated_id != customer_id
-    ):
+    if role != "ADMIN" and authenticated_id != customer_id:
         raise PermissionError(
-            "You are not authorized to update this customer."
+            f"You are not authorized to update customer {customer_id}."
+        )
+
+    allowed_fields = {"name", "email", "token", "role"}
+    unexpected = set(data) - allowed_fields
+    if unexpected:
+        raise ValueError(
+            "Unsupported customer fields: "
+            + ", ".join(sorted(unexpected))
+            + "."
         )
 
     fields = []
     values = []
 
     if "name" in data:
-        name = str(
-            data["name"]
-        ).strip()
-
-        if not name:
-            raise ValueError(
-                "Customer name cannot be empty."
-            )
-
+        if not isinstance(data["name"], str) or not data["name"].strip():
+            raise ValueError("Customer name must be a non-empty string.")
+        name = data["name"].strip()
+        if len(name) > 255:
+            raise ValueError("Customer name must not exceed 255 characters.")
         fields.append("name=%s")
         values.append(name)
 
     if "email" in data:
-        email = str(
-            data["email"]
-        ).strip()
-
-        if not email:
-            raise ValueError(
-                "Customer email cannot be empty."
-            )
-
+        if not isinstance(data["email"], str) or not data["email"].strip():
+            raise ValueError("Customer email must be a non-empty string.")
+        email = data["email"].strip()
+        if len(email) > 255 or not re.fullmatch(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise ValueError("Customer email must be a valid email address.")
         fields.append("email=%s")
         values.append(email)
 
-    if "token_hash" in data:
-        raise ValueError(
-            "token_hash must not be provided. "
-            "Send token instead."
-        )
-
+    token_hash = None
     if "token" in data:
         token = data["token"]
-
-        if not token:
-            raise ValueError(
-                "Customer token cannot be empty."
-            )
-
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Customer token must be a non-empty string.")
+        token = token.strip()
+        if len(token) < 8:
+            raise ValueError("Customer token must contain at least 8 characters.")
+        token_hash = hash_token(token)
         fields.append("token_hash=%s")
-        values.append(
-            hash_token(token)
-        )
+        values.append(token_hash)
 
     if "role" in data:
         if role != "ADMIN":
             raise PermissionError(
                 "Only administrators can change customer roles."
             )
-
-        new_role = str(
-            data["role"]
-        ).strip().upper()
-
+        if not isinstance(data["role"], str):
+            raise ValueError("Customer role must be a string.")
+        new_role = data["role"].strip().upper()
         if new_role not in VALID_ROLES:
             raise ValueError(
-                "Invalid role. Allowed roles: "
-                + ", ".join(
-                    sorted(VALID_ROLES)
-                )
+                "Invalid role. Allowed roles: ADMIN, PRODUCT_OWNER, USER."
             )
-
         fields.append("role=%s")
         values.append(new_role)
 
     if not fields:
-        raise ValueError(
-            "No fields to update."
-        )
-
-    values.append(customer_id)
+        raise ValueError("No valid fields were provided for update.")
 
     conn = get_db_connection()
 
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT customer_id
-                FROM customers
-                WHERE customer_id=%s
-                """,
+                "SELECT customer_id FROM customers WHERE customer_id=%s",
                 (customer_id,)
             )
-
             if not cur.fetchone():
                 return response(
                     404,
-                    {
-                        "message":
-                            "Customer not found."
-                    }
+                    {"message": f"Customer {customer_id} was not found."}
                 )
 
+            if "email" in data:
+                cur.execute(
+                    """
+                    SELECT customer_id FROM customers
+                    WHERE email=%s AND customer_id<>%s LIMIT 1
+                    """,
+                    (email, customer_id)
+                )
+                if cur.fetchone():
+                    return response(
+                        409,
+                        {"message": "The email address is already assigned to another customer."}
+                    )
+
+            if token_hash:
+                cur.execute(
+                    """
+                    SELECT customer_id FROM customers
+                    WHERE token_hash=%s AND customer_id<>%s LIMIT 1
+                    """,
+                    (token_hash, customer_id)
+                )
+                if cur.fetchone():
+                    return response(
+                        409,
+                        {"message": "The provided token is already assigned to another customer."}
+                    )
+
             cur.execute(
-                f"""
-                UPDATE customers
-                SET {",".join(fields)}
-                WHERE customer_id=%s
-                """,
-                values
+                f"UPDATE customers SET {','.join(fields)} WHERE customer_id=%s",
+                values + [customer_id]
             )
 
         conn.commit()
@@ -657,29 +635,20 @@ def update_customer(event):
         return response(
             200,
             {
-                "message":
-                    "Customer updated successfully.",
-                "customer_id":
-                    customer_id
+                "message": "Customer updated successfully.",
+                "customer_id": customer_id
             }
         )
 
     except pymysql.IntegrityError:
         conn.rollback()
-
         return response(
             409,
-            {
-                "message":
-                    "Customer could not be updated because "
-                    "the email or token already exists."
-            }
+            {"message": "Customer could not be updated because the email or token already exists."}
         )
-
     except Exception:
         conn.rollback()
         raise
-
     finally:
         conn.close()
 
@@ -760,28 +729,50 @@ def create_order(event):
 
     data = parse_body(event)
 
-    if not data.get("items"):
+    allowed_fields = {"customer_id", "items"}
+    unexpected = set(data) - allowed_fields
+
+    if unexpected:
         raise ValueError(
-            "items are required and must contain at least one product."
+            "Unsupported order fields: "
+            + ", ".join(sorted(unexpected))
+            + "."
         )
 
-    if role == "USER":
-        customer_id = authenticated_id
+    if "items" not in data:
+        raise ValueError(
+            "Order items are required. Provide at least one product."
+        )
 
-    else:
-        if "customer_id" not in data:
-            raise ValueError(
-                "customer_id is required for privileged order creation."
-            )
+    if not isinstance(data["items"], list):
+        raise ValueError("items must be an array of order items.")
+
+    if not data["items"]:
+        raise ValueError(
+            "Order items are required. Provide at least one product."
+        )
+    
+    if "customer_id" in data:
+        if isinstance(data["customer_id"], bool):
+            raise ValueError("customer_id must be a valid positive integer.")
 
         try:
-            customer_id = int(
-                data["customer_id"]
-            )
+            customer_id = int(data["customer_id"])
         except (TypeError, ValueError):
-            raise ValueError(
-                "customer_id must be a valid integer."
+            raise ValueError("customer_id must be a valid positive integer.")
+
+        if customer_id <= 0:
+            raise ValueError("customer_id must be a valid positive integer.")
+
+        if role == "USER" and customer_id != authenticated_id:
+            raise PermissionError(
+                f"You are not authorized to create an order for customer {customer_id}. "
+                f"Your authenticated customer ID is {authenticated_id}."
             )
+    else:
+        raise ValueError(
+            "customer_id is required when creating an order as an administrator or product owner."
+        )
 
     normalized_items = {}
 
@@ -945,8 +936,9 @@ def create_order(event):
 
                 if not product:
                     raise ValueError(
-                        f"Product {product_id} was not found, "
-                        "is inactive, or inventory does not exist."
+                        f"Product {product_id} is unavailable. "
+                        "The product may not exist, may be inactive, "
+                        "or may not have an inventory record."
                     )
 
                 available = int(
@@ -1038,19 +1030,26 @@ def create_order(event):
                 try:
                     publish_event(
                         "Order Failed",
-                        order_notification_detail(
-                            order_id=order_id,
-                            order_number=order_number,
-                            customer=customer,
-                            status="FAILED",
-                            total_amount=Decimal("0.00"),
-                            reason=reason,
-                            message=(
-                                f"Hello {customer['name']}, "
-                                f"your order {order_number} could not be "
-                                f"confirmed because of insufficient stock."
-                            )
-                        )
+                        {
+                            "order_id":
+                                order_id,
+                            "order_number":
+                                order_number,
+                            "customer": {
+                                "customer_id":
+                                    customer["customer_id"],
+                                "name":
+                                    customer["name"],
+                                "email":
+                                    customer["email"]
+                            },
+                            "previous_status":
+                                "PENDING",
+                            "status":
+                                "FAILED",
+                            "reason":
+                                reason
+                        }
                     )
 
                 except Exception:
@@ -1223,19 +1222,28 @@ def create_order(event):
         try:
             publish_event(
                 "Order Confirmed",
-                order_notification_detail(
-                    order_id=order_id,
-                    order_number=order_number,
-                    customer=customer,
-                    status="CONFIRMED",
-                    total_amount=total,
-                    reason="",
-                    message=(
-                        f"Hello {customer['name']}, "
-                        f"your order {order_number} has been "
-                        f"confirmed successfully."
-                    )
-                )
+                {
+                    "order_id":
+                        order_id,
+                    "order_number":
+                        order_number,
+                    "customer": {
+                        "customer_id":
+                            customer["customer_id"],
+                        "name":
+                            customer["name"],
+                        "email":
+                            customer["email"]
+                    },
+                    "previous_status":
+                        "PENDING",
+                    "status":
+                        "CONFIRMED",
+                    "items":
+                        order_items,
+                    "total_amount":
+                        total
+                }
             )
 
         except Exception:
@@ -1538,7 +1546,6 @@ def update_order(event):
                     o.status,
                     o.order_number,
                     o.customer_id,
-                    o.total_amount,
                     c.name,
                     c.email
                 FROM orders o
@@ -1613,23 +1620,24 @@ def update_order(event):
         try:
             publish_event(
                 f"Order {new_status.title()}",
-                order_notification_detail(
-                    order_id=order_id,
-                    order_number=order["order_number"],
-                    customer={
-                        "customer_id": order["customer_id"],
-                        "name": order["name"],
-                        "email": order["email"]
+                {
+                    "order_id":
+                        order_id,
+                    "order_number":
+                        order["order_number"],
+                    "customer": {
+                        "customer_id":
+                            order["customer_id"],
+                        "name":
+                            order["name"],
+                        "email":
+                            order["email"]
                     },
-                    status=new_status,
-                    total_amount=order["total_amount"],
-                    reason="",
-                    message=(
-                        f"Hello {order['name']}, "
-                        f"your order {order['order_number']} "
-                        f"is now {new_status}."
-                    )
-                )
+                    "previous_status":
+                        old_status,
+                    "status":
+                        new_status
+                }
             )
 
         except Exception:
@@ -1694,7 +1702,6 @@ def cancel_order(event):
                     o.status,
                     o.order_number,
                     o.customer_id,
-                    o.total_amount,
                     c.name,
                     c.email
                 FROM orders o
@@ -1829,23 +1836,24 @@ def cancel_order(event):
         try:
             publish_event(
                 "Order Cancelled",
-                order_notification_detail(
-                    order_id=order_id,
-                    order_number=order["order_number"],
-                    customer={
-                        "customer_id": order["customer_id"],
-                        "name": order["name"],
-                        "email": order["email"]
+                {
+                    "order_id":
+                        order_id,
+                    "order_number":
+                        order["order_number"],
+                    "customer": {
+                        "customer_id":
+                            order["customer_id"],
+                        "name":
+                            order["name"],
+                        "email":
+                            order["email"]
                     },
-                    status="CANCELLED",
-                    total_amount=order["total_amount"],
-                    reason="",
-                    message=(
-                        f"Hello {order['name']}, "
-                        f"your order {order['order_number']} "
-                        f"has been cancelled."
-                    )
-                )
+                    "previous_status":
+                        current_status,
+                    "status":
+                        "CANCELLED"
+                }
             )
 
         except Exception:
@@ -2017,7 +2025,7 @@ def lambda_handler(event, context):
             500,
             {
                 "message":
-                    "Database operation failed.",
+                    "The request could not be completed because of a database error.",
                 "request_id":
                     request_id
             }
@@ -2033,7 +2041,7 @@ def lambda_handler(event, context):
             500,
             {
                 "message":
-                    "The operation failed unexpectedly.",
+                    "The request could not be completed because of an unexpected server error.",
                 "request_id":
                     request_id
             }
