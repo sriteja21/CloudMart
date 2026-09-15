@@ -306,6 +306,28 @@ def publish_event(event_type, detail):
         raise
 
 
+def order_notification_detail(
+    order_id,
+    order_number,
+    customer,
+    status,
+    total_amount=None,
+    reason="",
+    message=""
+):
+    return {
+        "order_id": order_id,
+        "order_number": order_number,
+        "customer_id": customer["customer_id"],
+        "customer_name": customer["name"],
+        "customer_email": customer["email"],
+        "status": status,
+        "total_amount": total_amount if total_amount is not None else Decimal("0.00"),
+        "reason": reason,
+        "message": message
+    }
+
+
 @log_endpoint
 def create_customer(event):
     data = parse_body(event)
@@ -1016,26 +1038,19 @@ def create_order(event):
                 try:
                     publish_event(
                         "Order Failed",
-                        {
-                            "order_id":
-                                order_id,
-                            "order_number":
-                                order_number,
-                            "customer": {
-                                "customer_id":
-                                    customer["customer_id"],
-                                "name":
-                                    customer["name"],
-                                "email":
-                                    customer["email"]
-                            },
-                            "previous_status":
-                                "PENDING",
-                            "status":
-                                "FAILED",
-                            "reason":
-                                reason
-                        }
+                        order_notification_detail(
+                            order_id=order_id,
+                            order_number=order_number,
+                            customer=customer,
+                            status="FAILED",
+                            total_amount=Decimal("0.00"),
+                            reason=reason,
+                            message=(
+                                f"Hello {customer['name']}, "
+                                f"your order {order_number} could not be "
+                                f"confirmed because of insufficient stock."
+                            )
+                        )
                     )
 
                 except Exception:
@@ -1208,28 +1223,19 @@ def create_order(event):
         try:
             publish_event(
                 "Order Confirmed",
-                {
-                    "order_id":
-                        order_id,
-                    "order_number":
-                        order_number,
-                    "customer": {
-                        "customer_id":
-                            customer["customer_id"],
-                        "name":
-                            customer["name"],
-                        "email":
-                            customer["email"]
-                    },
-                    "previous_status":
-                        "PENDING",
-                    "status":
-                        "CONFIRMED",
-                    "items":
-                        order_items,
-                    "total_amount":
-                        total
-                }
+                order_notification_detail(
+                    order_id=order_id,
+                    order_number=order_number,
+                    customer=customer,
+                    status="CONFIRMED",
+                    total_amount=total,
+                    reason="",
+                    message=(
+                        f"Hello {customer['name']}, "
+                        f"your order {order_number} has been "
+                        f"confirmed successfully."
+                    )
+                )
             )
 
         except Exception:
@@ -1532,6 +1538,7 @@ def update_order(event):
                     o.status,
                     o.order_number,
                     o.customer_id,
+                    o.total_amount,
                     c.name,
                     c.email
                 FROM orders o
@@ -1606,24 +1613,23 @@ def update_order(event):
         try:
             publish_event(
                 f"Order {new_status.title()}",
-                {
-                    "order_id":
-                        order_id,
-                    "order_number":
-                        order["order_number"],
-                    "customer": {
-                        "customer_id":
-                            order["customer_id"],
-                        "name":
-                            order["name"],
-                        "email":
-                            order["email"]
+                order_notification_detail(
+                    order_id=order_id,
+                    order_number=order["order_number"],
+                    customer={
+                        "customer_id": order["customer_id"],
+                        "name": order["name"],
+                        "email": order["email"]
                     },
-                    "previous_status":
-                        old_status,
-                    "status":
-                        new_status
-                }
+                    status=new_status,
+                    total_amount=order["total_amount"],
+                    reason="",
+                    message=(
+                        f"Hello {order['name']}, "
+                        f"your order {order['order_number']} "
+                        f"is now {new_status}."
+                    )
+                )
             )
 
         except Exception:
@@ -1688,6 +1694,7 @@ def cancel_order(event):
                     o.status,
                     o.order_number,
                     o.customer_id,
+                    o.total_amount,
                     c.name,
                     c.email
                 FROM orders o
@@ -1822,24 +1829,23 @@ def cancel_order(event):
         try:
             publish_event(
                 "Order Cancelled",
-                {
-                    "order_id":
-                        order_id,
-                    "order_number":
-                        order["order_number"],
-                    "customer": {
-                        "customer_id":
-                            order["customer_id"],
-                        "name":
-                            order["name"],
-                        "email":
-                            order["email"]
+                order_notification_detail(
+                    order_id=order_id,
+                    order_number=order["order_number"],
+                    customer={
+                        "customer_id": order["customer_id"],
+                        "name": order["name"],
+                        "email": order["email"]
                     },
-                    "previous_status":
-                        current_status,
-                    "status":
-                        "CANCELLED"
-                }
+                    status="CANCELLED",
+                    total_amount=order["total_amount"],
+                    reason="",
+                    message=(
+                        f"Hello {order['name']}, "
+                        f"your order {order['order_number']} "
+                        f"has been cancelled."
+                    )
+                )
             )
 
         except Exception:

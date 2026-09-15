@@ -80,15 +80,8 @@ Resources:
               product_name: $.detail.product_name
               quantity_available: $.detail.quantity_available
               reorder_threshold: $.detail.reorder_threshold
-            InputTemplate: |
-              "CloudMart Low Stock Alert
-
-              Product ID: <product_id>
-              Product: <product_name>
-              Available Quantity: <quantity_available>
-              Reorder Threshold: <reorder_threshold>
-
-              Please review the inventory and take the required action."
+            InputTemplate: >-
+              "CloudMart Low Stock Alert | Product ID: <product_id> | Product: <product_name> | Available Quantity: <quantity_available> | Reorder Threshold: <reorder_threshold> | Please review the inventory and take the required action."
 
   OrderEventRule:
     Type: AWS::Events::Rule
@@ -117,18 +110,9 @@ Resources:
               status: $.detail.status
               total_amount: $.detail.total_amount
               reason: $.detail.reason
-            InputTemplate: |
-              "CloudMart Order Notification
-
-              Event: <event_type>
-              Order ID: <order_id>
-              Order Number: <order_number>
-              Customer ID: <customer_id>
-              Status: <status>
-              Total Amount: ₹<total_amount>
-              Reason: <reason>
-
-              Thank you for shopping with CloudMart."
+              message: $.detail.message
+            InputTemplate: >-
+              "CloudMart Order Notification | Event: <event_type> | Order ID: <order_id> | Order Number: <order_number> | Customer ID: <customer_id> | Status: <status> | Total Amount: <total_amount> | Reason: <reason> | Message: <message> | Thank you for shopping with CloudMart."
 
   LowStockSNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
