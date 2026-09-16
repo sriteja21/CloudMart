@@ -25,6 +25,18 @@ Parameters:
 
 
   # --------------------------------------------------------
+  # AUTHORIZATION TOKEN
+  # --------------------------------------------------------
+
+  AuthToken:
+    Type: String
+    Default: test-token-12345
+    NoEcho: true
+
+    Description: Authorization token for Lambda Authorizer
+
+
+  # --------------------------------------------------------
   # DATABASE USERNAME
   # --------------------------------------------------------
 
@@ -64,6 +76,26 @@ Parameters:
 # ==========================================================
 
 Resources:
+
+
+  # ========================================================
+  # AUTH TOKEN SSM PARAMETER
+  # ========================================================
+
+  AuthTokenParameter:
+    Type: AWS::SSM::Parameter
+
+    Properties:
+
+      Name:
+        !Sub /app/${Environment}/auth/token
+
+      Type: String
+
+      Value:
+        !Ref AuthToken
+
+      Description: Authorization token for Lambda Authorizer
 
 
   # ========================================================
@@ -301,8 +333,7 @@ Resources:
                   - events:PutEvents
 
                 Resource:
-                  Fn::ImportValue:
-                    !Sub CloudMart-${Environment}-EventBusArn
+                  !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
 
 
         # ====================================================
@@ -394,12 +425,13 @@ Resources:
 
 
         # ====================================================
-        # DATABASE PARAMETERS FROM SSM
+        # AUTH TOKEN FROM SSM
         # ====================================================
 
-        - PolicyName: AuthorizerDatabaseSSMAccess
+        - PolicyName: AuthorizerSSMAccess
 
           PolicyDocument:
+
             Version: '2012-10-17'
 
             Statement:
@@ -412,34 +444,7 @@ Resources:
 
                 Resource:
 
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/host
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/port
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/name
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/username
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/password
-
-
-        # ====================================================
-        # VPC NETWORK INTERFACES
-        # ====================================================
-
-        - PolicyName: AuthorizerVPCAccess
-
-          PolicyDocument:
-            Version: '2012-10-17'
-
-            Statement:
-
-              - Effect: Allow
-
-                Action:
-                  - ec2:CreateNetworkInterface
-                  - ec2:DescribeNetworkInterfaces
-                  - ec2:DeleteNetworkInterface
-                  - ec2:AssignPrivateIpAddresses
-                  - ec2:UnassignPrivateIpAddresses
-
-                Resource: '*'
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
 
 
   # ========================================================

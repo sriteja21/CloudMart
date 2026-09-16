@@ -520,7 +520,7 @@ def update_customer(event):
 
     if role != "ADMIN" and authenticated_id != customer_id:
         raise PermissionError(
-            f"You are not authorized to update customer {customer_id}."
+            "You are not authorized to update this customer."
         )
 
     allowed_fields = {"name", "email", "token", "role"}
@@ -766,12 +766,11 @@ def create_order(event):
 
         if role == "USER" and customer_id != authenticated_id:
             raise PermissionError(
-                f"You are not authorized to create an order for customer {customer_id}. "
-                f"Your authenticated customer ID is {authenticated_id}."
+                "You are not authorized to create an order for this customer."
             )
     else:
         raise ValueError(
-            "customer_id is required when creating an order as an administrator or product owner."
+            "customer_id is required when creating an order."
         )
 
     normalized_items = {}
