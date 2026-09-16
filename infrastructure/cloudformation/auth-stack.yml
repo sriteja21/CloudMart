@@ -4,17 +4,10 @@ Transform: AWS::Serverless-2016-10-31
 
 Description: CloudMart Authentication Stack
 
-
-# ==========================================================
-# PARAMETERS
-# ==========================================================
-
 Parameters:
 
   Environment:
-
     Type: String
-
     Default: dev
 
     AllowedValues:
@@ -24,16 +17,7 @@ Parameters:
     Description: Deployment environment
 
 
-# ==========================================================
-# RESOURCES
-# ==========================================================
-
 Resources:
-
-
-  # ========================================================
-  # LAMBDA AUTHORIZER
-  # ========================================================
 
   LambdaAuthorizer:
 
@@ -54,27 +38,22 @@ Resources:
 
       Timeout: 10
 
-
-      # ====================================================
-      # IAM ROLE
-      # ====================================================
-      #
-      # Automatically imports the role created by
-      # the IAM stack.
-      #
-      # No manual parameter is required.
-      #
-
       Role:
-
         Fn::ImportValue:
-
           !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
 
+      VpcConfig:
 
-      # ====================================================
-      # ENVIRONMENT
-      # ====================================================
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-2-ID
 
       Environment:
 
@@ -82,11 +61,6 @@ Resources:
 
           ENVIRONMENT:
             !Ref Environment
-
-
-      # ====================================================
-      # TAGS
-      # ====================================================
 
       Tags:
 
@@ -98,16 +72,7 @@ Resources:
         Component: Authentication
 
 
-# ==========================================================
-# OUTPUTS
-# ==========================================================
-
 Outputs:
-
-
-  # --------------------------------------------------------
-  # AUTHORIZER ARN
-  # --------------------------------------------------------
 
   LambdaAuthorizerArn:
 
@@ -122,10 +87,6 @@ Outputs:
       Name:
         !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
 
-
-  # --------------------------------------------------------
-  # AUTHORIZER NAME
-  # --------------------------------------------------------
 
   LambdaAuthorizerName:
 

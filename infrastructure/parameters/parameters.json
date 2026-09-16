@@ -1,0 +1,32 @@
+{
+  "Environment": "dev",
+
+  "Network": {
+    "VpcCidr": "10.0.0.0/16",
+    "PublicSubnetCidr": "10.0.1.0/24",
+    "PrivateSubnetCidr": "10.0.2.0/24",
+    "PrivateSubnet2Cidr": "10.0.3.0/24"
+  },
+
+  "Database": {
+    "DBName": "cloudmart",
+    "DBUsername": "cloudmartadmin",
+    "DBInstanceClass": "db.t3.micro",
+    "DBAllocatedStorage": "20",
+    "DBEngine": "mysql",
+    "DBEngineVersion": "8.0"
+  },
+
+  "Application": {
+    "LambdaRuntime": "python3.12",
+    "ApiStageName": "dev"
+  },
+
+  "Auth": {
+    "TokenParameterPath": "/app/dev/auth"
+  },
+
+  "EventDriven": {
+    "EventBusName": "cloudmart-dev-event-bus"
+  }
+}

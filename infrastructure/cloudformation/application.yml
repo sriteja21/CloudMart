@@ -13,6 +13,7 @@ Parameters:
       - dev
       - prod
 
+
 Resources:
 
   ProductApiFunction:
@@ -61,43 +62,72 @@ Resources:
       Events:
 
         GetProducts:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /product
+
             Method: GET
+
 
         CreateProduct:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /product
+
             Method: POST
 
+
         GetProduct:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /product/{id}
+
             Method: GET
 
+
         UpdateProduct:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /product/{id}
+
             Method: PUT
 
+
         DeleteProduct:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /product/{id}
+
             Method: DELETE
 
 
@@ -147,100 +177,160 @@ Resources:
       Events:
 
         CreateCustomer:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /customer
+
             Method: POST
+
+            Auth:
+              Authorizer: NONE
+
 
         GetCustomers:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /customer
+
             Method: GET
+
 
         GetCustomer:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /customer/{id}
+
             Method: GET
+
 
         UpdateCustomer:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /customer/{id}
+
             Method: PUT
+
 
         DeleteCustomer:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /customer/{id}
+
             Method: DELETE
+
 
         CreateOrder:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /order
+
             Method: POST
+
 
         GetOrders:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /order
+
             Method: GET
+
 
         GetOrder:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /order/{id}
+
             Method: GET
+
 
         UpdateOrder:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /order/{id}
+
             Method: PUT
 
-        DeleteOrder:
-          Type: Api
-          Properties:
-            RestApiId:
-              !Ref ProductApi
-            Path: /order/{id}
-            Method: DELETE
 
         GetCustomerOrders:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
+
             Path: /order/customer/{id}
+
             Method: GET
 
+
         CancelOrder:
+
           Type: Api
+
           Properties:
+
             RestApiId:
               !Ref ProductApi
-            Path: /order/{id}/cancel
-            Method: POST
+
+            Path: /order/{id}
+
+            Method: PATCH
 
 
   ProductApi:
@@ -260,7 +350,7 @@ Resources:
 
       Cors:
 
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
 
         AllowHeaders: "'Content-Type,Authorization'"
 
@@ -298,6 +388,7 @@ Outputs:
 
       !Sub
         - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+
         - ApiId:
             !Ref ProductApi
 
