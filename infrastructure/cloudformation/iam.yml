@@ -333,7 +333,7 @@ Resources:
                   - events:PutEvents
 
                 Resource:
-                  !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
+                  - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/cloudmart-${Environment}-event-bus
 
 
         # ====================================================
@@ -445,6 +445,31 @@ Resources:
                 Resource:
 
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
+
+
+        # ====================================================
+        # VPC NETWORK INTERFACES
+        # Required because the Lambda Authorizer runs in the VPC
+        # ====================================================
+
+        - PolicyName: AuthorizerVPCAccess
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+
+                Resource: '*'
 
 
   # ========================================================
