@@ -332,7 +332,7 @@ Resources:
 
       FlexibleTimeWindow:
 
-        Mode: OFF
+        Mode: 'OFF'
 
 
       # ----------------------------------------------------
