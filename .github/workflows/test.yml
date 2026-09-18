@@ -238,6 +238,7 @@ jobs:
             --stack-name "${REPORT_STACK_NAME}" \
             --template-file .aws-sam/build/template.yaml \
             --region "${AWS_REGION}" \
+            --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
