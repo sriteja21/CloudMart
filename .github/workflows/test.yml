@@ -1,0 +1,308 @@
+```yaml
+name: Test and Deploy Report Stack
+
+on:
+
+  push:
+    branches:
+      - report
+
+ 
+
+  workflow_dispatch:
+
+
+# ==========================================================
+# ENVIRONMENT VARIABLES
+# ==========================================================
+
+env:
+
+  AWS_REGION: ap-south-1
+
+  ENVIRONMENT: dev
+
+  REPORT_BUCKET_NAME: cloudmart-dev-reports-test
+
+  REPORT_STACK_NAME: CloudMart-Reporting-dev
+
+  SAM_TEMPLATE: infrastructure/cloudformation/reporting-stack.yml
+
+
+# ==========================================================
+# PERMISSIONS
+# ==========================================================
+
+permissions:
+
+  id-token: write
+  contents: read
+
+
+# ==========================================================
+# JOB
+# ==========================================================
+
+jobs:
+
+  validate-and-deploy:
+
+    name: Validate and Deploy Report Stack
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+
+      # ======================================================
+      # CONFIGURE AWS CREDENTIALS
+      # ======================================================
+
+      - name: Configure AWS credentials
+
+        uses: aws-actions/configure-aws-credentials@v4
+
+        with:
+
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+          aws-region: ${{ env.AWS_REGION }}
+
+          role-session-name: GitHubActions-Report
+
+
+      # ======================================================
+      # VERIFY AWS CONNECTION
+      # ======================================================
+
+      - name: Verify AWS identity
+
+        run: |
+
+          set -e
+
+          echo "Checking AWS identity..."
+
+          aws sts get-caller-identity
+
+
+      # ======================================================
+      # INSTALL AWS SAM CLI
+      # ======================================================
+
+      - name: Setup SAM CLI
+
+        uses: aws-actions/setup-sam@v2
+
+        with:
+
+          use-installer: true
+
+
+      # ======================================================
+      # VERIFY SAM
+      # ======================================================
+
+      - name: Check SAM version
+
+        run: |
+
+          set -e
+
+          sam --version
+
+
+      # ======================================================
+      # VALIDATE IAM TEMPLATE
+      # ======================================================
+
+      - name: Validate IAM CloudFormation template
+
+        run: |
+
+          set -e
+
+          echo "Validating IAM template..."
+
+          aws cloudformation validate-template \
+            --template-body file://infrastructure/cloudformation/iam.yml \
+            > /dev/null
+
+          echo "IAM template validation successful."
+
+
+      # ======================================================
+      # VALIDATE REPORTING STACK
+      # ======================================================
+
+      - name: Validate Reporting SAM template
+
+        run: |
+
+          set -e
+
+          echo "Validating Reporting SAM template..."
+
+          sam validate \
+            --template-file infrastructure/cloudformation/reporting-stack.yml \
+            --lint
+
+          echo "Reporting template validation successful."
+
+
+      # ======================================================
+      # CHECK REPORT DIRECTORY
+      # ======================================================
+
+      - name: Verify Report Lambda source files
+
+        run: |
+
+          set -e
+
+          echo "Checking Report Lambda source..."
+
+          test -f src/report/lambda_function.py
+
+          test -f src/report/requirements.txt
+
+          echo "Report Lambda source files found."
+
+
+      # ======================================================
+      # CHECK REPORT BUCKET
+      # ======================================================
+
+      - name: Check Report S3 bucket
+
+        run: |
+
+          set -e
+
+          echo "Checking report bucket..."
+
+          if aws s3api head-bucket \
+            --bucket "${REPORT_BUCKET_NAME}" 2>/dev/null; then
+
+            echo "Report bucket already exists."
+
+          else
+
+            echo "Report bucket does not exist yet."
+
+          fi
+
+
+      # ======================================================
+      # SAM BUILD
+      # ======================================================
+
+      - name: SAM build
+
+        run: |
+
+          set -e
+
+          echo "Building Report Lambda..."
+
+          sam build \
+            --template-file "${SAM_TEMPLATE}" \
+            --use-container
+
+          echo "SAM build successful."
+
+
+      # ======================================================
+      # SAM DEPLOY
+      # ======================================================
+
+      - name: SAM deploy
+
+        run: |
+
+          set -e
+
+          echo "Deploying CloudMart Reporting Stack..."
+
+          sam deploy \
+            --stack-name "${REPORT_STACK_NAME}" \
+            --template-file .aws-sam/build/template.yaml \
+            --region "${AWS_REGION}" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment="${ENVIRONMENT}" \
+              ReportS3BucketName="${REPORT_BUCKET_NAME}"
+
+          echo "Reporting stack deployed successfully."
+
+
+      # ======================================================
+      # DISPLAY STACK OUTPUTS
+      # ======================================================
+
+      - name: Display Reporting stack outputs
+
+        run: |
+
+          set -e
+
+          echo "CloudMart Reporting Stack outputs:"
+
+          aws cloudformation describe-stacks \
+            --stack-name "${REPORT_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query "Stacks[0].Outputs" \
+            --output table
+
+
+      # ======================================================
+      # VERIFY REPORT LAMBDA
+      # ======================================================
+
+      - name: Verify Report Lambda
+
+        run: |
+
+          set -e
+
+          echo "Checking Report Lambda..."
+
+          FUNCTION_NAME="CloudMart-Report-Lambda-${ENVIRONMENT}"
+
+          aws lambda get-function \
+            --function-name "${FUNCTION_NAME}" \
+            --region "${AWS_REGION}" \
+            > /dev/null
+
+          echo "Report Lambda exists successfully."
+
+
+      # ======================================================
+      # VERIFY REPORT BUCKET
+      # ======================================================
+
+      - name: Verify Report S3 bucket
+
+        run: |
+
+          set -e
+
+          echo "Checking Report S3 bucket..."
+
+          aws s3api head-bucket \
+            --bucket "${REPORT_BUCKET_NAME}"
+
+          echo "Report S3 bucket is accessible."
+```

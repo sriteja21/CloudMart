@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  CloudMart Reporting Stack.
+  Creates the report S3 bucket and Report Lambda.
+
+
+# ==========================================================
+# PARAMETERS
+# ==========================================================
+
+Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+
+    AllowedValues:
+      - dev
+      - prod
+
+    Description: Deployment environment
+
+
+  ReportS3BucketName:
+    Type: String
+    Default: cloudmart-dev-reports-test
+
+    Description: S3 bucket used to store CloudMart reports
+
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
+
+Resources:
+
+  # ========================================================
+  # REPORT S3 BUCKET
+  # ========================================================
+
+  ReportBucket:
+    Type: AWS::S3::Bucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName:
+        !Ref ReportS3BucketName
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+
+        ServerSideEncryptionConfiguration:
+
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+
+        BlockPublicAcls: true
+
+        BlockPublicPolicy: true
+
+        IgnorePublicAcls: true
+
+        RestrictPublicBuckets: true
+
+      Tags:
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+        - Key: Component
+          Value: Reporting
+
+
+  # ========================================================
+  # REPORT LAMBDA
+  # ========================================================
+
+  ReportLambda:
+    Type: AWS::Serverless::Function
+
+    Properties:
+
+      FunctionName:
+        !Sub CloudMart-Report-Lambda-${Environment}
+
+      Description:
+        CloudMart daily operational report generator
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      CodeUri: ../../src/report/
+
+      Timeout: 60
+
+      MemorySize: 256
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-ReportLambdaExecutionRoleArn-${Environment}
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+      VpcConfig:
+
+        SecurityGroupIds:
+
+          - Fn::ImportValue:
+              CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-2-ID
+
+      Tags:
+
+        Project: CloudMart
+
+        Environment: !Ref Environment
+
+        Component: Reporting
+
+
+# ==========================================================
+# OUTPUTS
+# ==========================================================
+
+Outputs:
+
+  # --------------------------------------------------------
+  # REPORT BUCKET NAME
+  # --------------------------------------------------------
+
+  ReportBucketName:
+
+    Description:
+      CloudMart report S3 bucket name
+
+    Value:
+      !Ref ReportBucket
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportBucketName-${Environment}
+
+
+  # --------------------------------------------------------
+  # REPORT BUCKET ARN
+  # --------------------------------------------------------
+
+  ReportBucketArn:
+
+    Description:
+      CloudMart report S3 bucket ARN
+
+    Value:
+      !GetAtt ReportBucket.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportBucketArn-${Environment}
+
+
+  # --------------------------------------------------------
+  # REPORT LAMBDA ARN
+  # --------------------------------------------------------
+
+  ReportLambdaArn:
+
+    Description:
+      CloudMart Report Lambda ARN
+
+    Value:
+      !GetAtt ReportLambda.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportLambdaArn-${Environment}
+
+
+  # --------------------------------------------------------
+  # REPORT LAMBDA NAME
+  # --------------------------------------------------------
+
+  ReportLambdaName:
+
+    Description:
+      CloudMart Report Lambda name
+
+    Value:
+      !Ref ReportLambda
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportLambdaName-${Environment}
