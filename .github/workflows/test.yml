@@ -1,4 +1,4 @@
-```yaml
+
 name: Test and Deploy Report Stack
 
 on:
@@ -305,4 +305,3 @@ jobs:
             --bucket "${REPORT_BUCKET_NAME}"
 
           echo "Report S3 bucket is accessible."
-```
