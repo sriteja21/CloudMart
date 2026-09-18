@@ -16,7 +16,6 @@ Parameters:
   Environment:
     Type: String
     Default: dev
-
     AllowedValues:
       - dev
       - prod
@@ -473,6 +472,157 @@ Resources:
 
 
   # ========================================================
+  # REPORT LAMBDA EXECUTION ROLE
+  # Dedicated role for the CloudMart Report Lambda
+  # ========================================================
+
+  ReportLambdaExecutionRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName:
+        !Sub CloudMart-Report-Lambda-Role-${Environment}
+
+
+      # ------------------------------------------------------
+      # TRUST POLICY
+      # ------------------------------------------------------
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      # ------------------------------------------------------
+      # REPORT LAMBDA POLICIES
+      # ------------------------------------------------------
+
+      Policies:
+
+
+        # ====================================================
+        # CLOUDWATCH LOGS
+        # ====================================================
+
+        - PolicyName: ReportLambdaCloudWatchLogs
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Report-Lambda-${Environment}:*
+
+
+        # ====================================================
+        # SSM DATABASE AND REPORT BUCKET PARAMETERS
+        # ====================================================
+
+        - PolicyName: ReportLambdaSSMAccess
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+
+                Resource:
+
+                  # Database host
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/host
+
+                  # Database port
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/port
+
+                  # Database name
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/name
+
+                  # Database username
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/username
+
+                  # Database password
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/password
+
+                  # Report S3 bucket
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/s3/report-bucket
+
+
+        # ====================================================
+        # S3 REPORT BUCKET ACCESS
+        # ====================================================
+
+        - PolicyName: ReportLambdaS3Access
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+                  - s3:PutObject
+
+                Resource:
+
+                  - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}/*
+
+
+        # ====================================================
+        # VPC NETWORK INTERFACES
+        # Required because Report Lambda runs inside VPC
+        # ====================================================
+
+        - PolicyName: ReportLambdaVPCAccess
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+
+                Resource: '*'
+
+
+  # ========================================================
   # CLOUDFORMATION EXECUTION ROLE
   # ========================================================
 
@@ -569,6 +719,8 @@ Resources:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Execution-Role-${Environment}
 
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Authorizer-Role-${Environment}
+
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Report-Lambda-Role-${Environment}
 
 
               # ==================================================
@@ -805,6 +957,23 @@ Outputs:
     Export:
       Name:
         !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+
+
+  # --------------------------------------------------------
+  # REPORT LAMBDA EXECUTION ROLE ARN
+  # --------------------------------------------------------
+
+  ReportLambdaExecutionRoleArn:
+
+    Description:
+      Report Lambda execution role ARN
+
+    Value:
+      !GetAtt ReportLambdaExecutionRole.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportLambdaExecutionRoleArn-${Environment}
 
 
   # --------------------------------------------------------

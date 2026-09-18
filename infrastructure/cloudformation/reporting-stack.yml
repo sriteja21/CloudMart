@@ -1,0 +1,486 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  CloudMart Reporting Stack.
+  Creates the report S3 bucket, Report Lambda,
+  and EventBridge Scheduler for daily reports.
+
+
+# ==========================================================
+# PARAMETERS
+# ==========================================================
+
+Parameters:
+
+  # --------------------------------------------------------
+  # ENVIRONMENT
+  # --------------------------------------------------------
+
+  Environment:
+    Type: String
+    Default: dev
+
+    AllowedValues:
+      - dev
+      - prod
+
+    Description: Deployment environment
+
+
+  # --------------------------------------------------------
+  # REPORT S3 BUCKET
+  # --------------------------------------------------------
+
+  ReportS3BucketName:
+    Type: String
+    Default: cloudmart-dev-reports-test
+
+    Description: S3 bucket used to store CloudMart reports
+
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
+
+Resources:
+
+
+  # ========================================================
+  # REPORT S3 BUCKET
+  # ========================================================
+
+  ReportBucket:
+    Type: AWS::S3::Bucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName:
+        !Ref ReportS3BucketName
+
+
+      # ----------------------------------------------------
+      # VERSIONING
+      # ----------------------------------------------------
+
+      VersioningConfiguration:
+
+        Status: Enabled
+
+
+      # ----------------------------------------------------
+      # SERVER-SIDE ENCRYPTION
+      # ----------------------------------------------------
+
+      BucketEncryption:
+
+        ServerSideEncryptionConfiguration:
+
+          - ServerSideEncryptionByDefault:
+
+              SSEAlgorithm: AES256
+
+
+      # ----------------------------------------------------
+      # PUBLIC ACCESS BLOCK
+      # ----------------------------------------------------
+
+      PublicAccessBlockConfiguration:
+
+        BlockPublicAcls: true
+
+        BlockPublicPolicy: true
+
+        IgnorePublicAcls: true
+
+        RestrictPublicBuckets: true
+
+
+      # ----------------------------------------------------
+      # TAGS
+      # ----------------------------------------------------
+
+      Tags:
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+        - Key: Component
+          Value: Reporting
+
+
+  # ========================================================
+  # REPORT LAMBDA
+  # ========================================================
+
+  ReportLambda:
+    Type: AWS::Serverless::Function
+
+    Properties:
+
+      FunctionName:
+        !Sub CloudMart-Report-Lambda-${Environment}
+
+
+      # ----------------------------------------------------
+      # DESCRIPTION
+      # ----------------------------------------------------
+
+      Description:
+        CloudMart daily operational report generator
+
+
+      # ----------------------------------------------------
+      # RUNTIME
+      # ----------------------------------------------------
+
+      Runtime: python3.12
+
+
+      # ----------------------------------------------------
+      # HANDLER
+      # ----------------------------------------------------
+
+      Handler: lambda_function.lambda_handler
+
+
+      # ----------------------------------------------------
+      # SOURCE CODE
+      # ----------------------------------------------------
+
+      CodeUri: ../../src/report/
+
+
+      # ----------------------------------------------------
+      # TIMEOUT
+      # ----------------------------------------------------
+
+      Timeout: 60
+
+
+      # ----------------------------------------------------
+      # MEMORY
+      # ----------------------------------------------------
+
+      MemorySize: 256
+
+
+      # ----------------------------------------------------
+      # IAM ROLE
+      # ----------------------------------------------------
+
+      Role:
+
+        Fn::ImportValue:
+          !Sub CloudMart-ReportLambdaExecutionRoleArn-${Environment}
+
+
+      # ----------------------------------------------------
+      # ENVIRONMENT VARIABLES
+      # ----------------------------------------------------
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+
+      # ----------------------------------------------------
+      # VPC CONFIGURATION
+      # ----------------------------------------------------
+
+      VpcConfig:
+
+        SecurityGroupIds:
+
+          - Fn::ImportValue:
+              CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              CloudMart-Private-Subnet-2-ID
+
+
+      # ----------------------------------------------------
+      # TAGS
+      # ----------------------------------------------------
+
+      Tags:
+
+        Project: CloudMart
+
+        Environment: !Ref Environment
+
+        Component: Reporting
+
+
+  # ========================================================
+  # EVENTBRIDGE SCHEDULER IAM ROLE
+  # ========================================================
+
+  ReportSchedulerRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName:
+        !Sub CloudMart-Report-Scheduler-Role-${Environment}
+
+
+      # ----------------------------------------------------
+      # TRUST POLICY
+      # ----------------------------------------------------
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+
+              Service:
+                - scheduler.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      # ----------------------------------------------------
+      # PERMISSION TO INVOKE REPORT LAMBDA
+      # ----------------------------------------------------
+
+      Policies:
+
+        - PolicyName: InvokeReportLambda
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+
+                  - lambda:InvokeFunction
+
+                Resource:
+
+                  - !GetAtt ReportLambda.Arn
+
+
+  # ========================================================
+  # DAILY REPORT EVENTBRIDGE SCHEDULER
+  # ========================================================
+
+  DailyReportSchedule:
+    Type: AWS::Scheduler::Schedule
+
+    Properties:
+
+      Name:
+        !Sub CloudMart-Daily-Report-${Environment}
+
+
+      # ----------------------------------------------------
+      # DESCRIPTION
+      # ----------------------------------------------------
+
+      Description:
+        Daily CloudMart report generation schedule
+
+
+      # ----------------------------------------------------
+      # ENABLE SCHEDULE
+      # ----------------------------------------------------
+
+      State: ENABLED
+
+
+      # ----------------------------------------------------
+      # DAILY AT 11:00 PM IST
+      # ----------------------------------------------------
+
+      ScheduleExpression:
+        cron(0 23 * * ? *)
+
+
+      ScheduleExpressionTimezone:
+        Asia/Kolkata
+
+
+      # ----------------------------------------------------
+      # DISABLE FLEXIBLE WINDOW
+      # ----------------------------------------------------
+
+      FlexibleTimeWindow:
+
+        Mode: 'OFF'
+
+
+      # ----------------------------------------------------
+      # TARGET
+      # ----------------------------------------------------
+
+      Target:
+
+        Arn:
+          !GetAtt ReportLambda.Arn
+
+        RoleArn:
+          !GetAtt ReportSchedulerRole.Arn
+
+
+        # --------------------------------------------------
+        # EVENT INPUT
+        # --------------------------------------------------
+
+        Input: |
+          {
+            "source": "eventbridge-scheduler",
+            "report_type": "daily"
+          }
+
+
+# ==========================================================
+# OUTPUTS
+# ==========================================================
+
+Outputs:
+
+
+  # ========================================================
+  # REPORT BUCKET NAME
+  # ========================================================
+
+  ReportBucketName:
+
+    Description:
+      CloudMart report S3 bucket name
+
+    Value:
+      !Ref ReportBucket
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportBucketName-${Environment}
+
+
+  # ========================================================
+  # REPORT BUCKET ARN
+  # ========================================================
+
+  ReportBucketArn:
+
+    Description:
+      CloudMart report S3 bucket ARN
+
+    Value:
+      !GetAtt ReportBucket.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportBucketArn-${Environment}
+
+
+  # ========================================================
+  # REPORT LAMBDA ARN
+  # ========================================================
+
+  ReportLambdaArn:
+
+    Description:
+      CloudMart Report Lambda ARN
+
+    Value:
+      !GetAtt ReportLambda.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportLambdaArn-${Environment}
+
+
+  # ========================================================
+  # REPORT LAMBDA NAME
+  # ========================================================
+
+  ReportLambdaName:
+
+    Description:
+      CloudMart Report Lambda name
+
+    Value:
+      !Ref ReportLambda
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportLambdaName-${Environment}
+
+
+  # ========================================================
+  # SCHEDULER ARN
+  # ========================================================
+
+  DailyReportScheduleArn:
+
+    Description:
+      Daily CloudMart Report EventBridge Scheduler ARN
+
+    Value:
+      !GetAtt DailyReportSchedule.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-DailyReportScheduleArn-${Environment}
+
+
+  # ========================================================
+  # SCHEDULER NAME
+  # ========================================================
+
+  DailyReportScheduleName:
+
+    Description:
+      Daily CloudMart Report EventBridge Scheduler name
+
+    Value:
+      !Ref DailyReportSchedule
+
+    Export:
+      Name:
+        !Sub CloudMart-DailyReportScheduleName-${Environment}
+
+
+  # ========================================================
+  # SCHEDULER ROLE ARN
+  # ========================================================
+
+  ReportSchedulerRoleArn:
+
+    Description:
+      EventBridge Scheduler execution role ARN
+
+    Value:
+      !GetAtt ReportSchedulerRole.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-ReportSchedulerRoleArn-${Environment}
+
