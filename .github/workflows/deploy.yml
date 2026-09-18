@@ -1,72 +1,129 @@
+
 name: CloudMart Deploy
+
 on:
+
   push:
     branches:
       - main
-
   workflow_dispatch:
 
+
+# ==========================================================
+# ENVIRONMENT VARIABLES
+# ==========================================================
+
 env:
+
   AWS_REGION: ap-south-1
 
+  ENVIRONMENT: dev
+
+  REPORT_BUCKET_NAME: cloudmart-dev-reports-test
+
+  REPORT_STACK_NAME: CloudMart-Reporting-dev
+
+  SAM_REPORT_TEMPLATE: infrastructure/cloudformation/reporting-stack.yml
+
+
+# ==========================================================
+# PERMISSIONS
+# ==========================================================
+
 permissions:
+
   id-token: write
   contents: read
 
+
+# ==========================================================
+# JOBS
+# ==========================================================
+
 jobs:
 
-  # ==========================================================
+
+  # ========================================================
   # 1. VALIDATE
-  # ==========================================================
+  # ========================================================
+
   validate:
+
     name: Validate
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Validate CloudFormation
+
         run: |
+
           set -e
 
           for template in infrastructure/cloudformation/*.yml; do
+
             echo "Validating $template"
 
             aws cloudformation validate-template \
               --template-body "file://$template" \
               >/dev/null
+
           done
 
           echo "Validation successful"
 
 
-  # ==========================================================
+  # ========================================================
   # 2. NETWORK
-  # ==========================================================
+  # ========================================================
+
   network:
+
     name: Network
+
     needs: validate
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Deploy Network
+
         run: |
+
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/network.yml \
             --stack-name cloudmart-network \
@@ -76,35 +133,57 @@ jobs:
           echo "Network deployment successful"
 
 
-  # ==========================================================
+  # ========================================================
   # 3. DATABASE
-  # ==========================================================
+  # ========================================================
+
   database:
+
     name: Database
+
     needs: network
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Validate DB Password
+
         run: |
+
           set -e
+
           if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
+
             echo "DB_PASSWORD secret is missing"
+
             exit 1
+
           fi
+
           echo "DB_PASSWORD secret is available"
 
+
       - name: Deploy Database
+
         run: |
+
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/data.yml \
             --stack-name cloudmart-data \
@@ -115,8 +194,11 @@ jobs:
 
           echo "Database deployment successful"
 
+
       - name: Wait for RDS
+
         run: |
+
           DB_ID=$(aws cloudformation describe-stacks \
             --stack-name cloudmart-data \
             --region "$AWS_REGION" \
@@ -124,36 +206,52 @@ jobs:
             --output text)
 
           if [ -n "$DB_ID" ] && [ "$DB_ID" != "None" ]; then
+
             echo "Waiting for RDS instance: $DB_ID"
 
             aws rds wait db-instance-available \
               --db-instance-identifier "$DB_ID" \
               --region "$AWS_REGION"
+
           fi
 
           echo "RDS available"
 
 
-  # ==========================================================
+  # ========================================================
   # 4. IAM
-  # ==========================================================
+  # ========================================================
+
   iam:
+
     name: IAM
+
     needs: database
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Deploy IAM
+
         run: |
+
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/iam.yml \
             --stack-name cloudmart-iam \
@@ -165,8 +263,11 @@ jobs:
 
           echo "IAM deployment successful"
 
+
       - name: Verify IAM Exports
+
         run: |
+
           set -e
 
           for export in \
@@ -176,6 +277,7 @@ jobs:
             CloudMart-DatabasePort \
             CloudMart-DatabaseName
           do
+
             echo "Checking export: $export"
 
             VALUE=$(aws cloudformation list-exports \
@@ -184,50 +286,75 @@ jobs:
               --output text)
 
             if [ -z "$VALUE" ] || [ "$VALUE" = "None" ]; then
+
               echo "Missing export: $export"
+
               exit 1
+
             fi
 
             echo "Verified: $export"
+
           done
 
           echo "IAM exports verified"
 
 
-
-  # ==========================================================
+  # ========================================================
   # 5. AUTH
-  # ==========================================================
+  # ========================================================
+
   auth:
+
     name: Auth
+
     needs: iam
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Setup SAM
+
         uses: aws-actions/setup-sam@v2
 
+
       - name: Validate Auth
+
         run: |
+
           sam validate \
             --template-file infrastructure/cloudformation/auth-stack.yml
 
+
       - name: Build Auth
+
         run: |
+
           sam build \
             --template-file infrastructure/cloudformation/auth-stack.yml
 
+
       - name: Deploy Auth
+
         run: |
+
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name cloudmart-auth \
@@ -239,8 +366,11 @@ jobs:
 
           echo "Auth deployment successful"
 
+
       - name: Verify Authorizer
+
         run: |
+
           aws lambda get-function \
             --function-name CloudMart-Lambda-Authorizer-dev \
             --region "$AWS_REGION" \
@@ -249,42 +379,65 @@ jobs:
           echo "Authorizer verified"
 
 
-  # ==========================================================
+  # ========================================================
   # 6. EVENT DRIVEN
-  # ==========================================================
+  # ========================================================
+
   event-driven:
+
     name: Event Driven
+
     needs: auth
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Validate Email Secrets
+
         run: |
+
           set -e
 
           if [ -z "${{ secrets.LOW_STOCK_EMAIL }}" ]; then
+
             echo "LOW_STOCK_EMAIL secret is missing"
+
             exit 1
+
           fi
 
           if [ -z "${{ secrets.ORDER_NOTIFICATION_EMAIL }}" ]; then
+
             echo "ORDER_NOTIFICATION_EMAIL secret is missing"
+
             exit 1
+
           fi
 
           echo "Required email secrets are available"
 
+
       - name: Deploy Event Driven Stack
+
         run: |
+
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/event-driven-stack.yml \
             --stack-name cloudmart-event-driven \
@@ -297,8 +450,11 @@ jobs:
 
           echo "Event-driven deployment successful"
 
+
       - name: Verify Event Driven Stack
+
         run: |
+
           set -e
 
           TOPIC=$(aws cloudformation list-exports \
@@ -312,60 +468,92 @@ jobs:
             --output text)
 
           if [ -z "$TOPIC" ] || [ "$TOPIC" = "None" ]; then
+
             echo "Low stock SNS topic export is missing"
+
             exit 1
+
           fi
 
           if [ -z "$BUS" ] || [ "$BUS" = "None" ]; then
+
             echo "EventBridge bus export is missing"
+
             exit 1
+
           fi
 
           echo "SNS and EventBridge verified"
 
 
-  # ==========================================================
+  # ========================================================
   # 7. APPLICATION / PRODUCT + ORDER API
-  # ==========================================================
+  # ========================================================
+
   application:
+
     name: Application stack
+
     needs: event-driven
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
+
         uses: actions/checkout@v4
 
+
       - name: Configure AWS
+
         uses: aws-actions/configure-aws-credentials@v5
+
         with:
+
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Setup SAM
+
         uses: aws-actions/setup-sam@v2
 
+
       - name: Validate Product API
+
         run: |
+
           sam validate \
             --template-file infrastructure/cloudformation/application.yml
 
+
       - name: Build Product API
+
         run: |
+
           sam build \
             --template-file infrastructure/cloudformation/application.yml
 
+
       - name: Verify Build
+
         run: |
+
           set -e
 
           test -f .aws-sam/build/ProductApiFunction/lambda_function.py
+
           test -f .aws-sam/build/ProductApiFunction/schema.sql
 
           echo "Product API build verified"
 
+
       - name: Deploy Product API
+
         run: |
+
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name cloudmart-application \
@@ -376,3 +564,329 @@ jobs:
             --no-fail-on-empty-changeset
 
           echo "Product API deployment successful"
+
+
+  # ========================================================
+  # 8. REPORTING
+  # ========================================================
+
+  reporting:
+
+    name: Reporting
+
+    needs: application
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+
+      # ------------------------------------------------------
+      # CHECKOUT
+      # ------------------------------------------------------
+
+      - name: Checkout
+
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # CONFIGURE AWS
+      # ------------------------------------------------------
+
+      - name: Configure AWS
+
+        uses: aws-actions/configure-aws-credentials@v5
+
+        with:
+
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+          aws-region: ${{ env.AWS_REGION }}
+
+          role-session-name: GitHubActions-Report
+
+
+      # ------------------------------------------------------
+      # VERIFY AWS
+      # ------------------------------------------------------
+
+      - name: Verify AWS identity
+
+        run: |
+
+          set -e
+
+          echo "Checking AWS identity..."
+
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # SETUP SAM
+      # ------------------------------------------------------
+
+      - name: Setup SAM
+
+        uses: aws-actions/setup-sam@v2
+
+        with:
+
+          use-installer: true
+
+
+      # ------------------------------------------------------
+      # CHECK SAM
+      # ------------------------------------------------------
+
+      - name: Check SAM version
+
+        run: |
+
+          set -e
+
+          sam --version
+
+
+      # ------------------------------------------------------
+      # VALIDATE IAM
+      # ------------------------------------------------------
+
+      - name: Validate IAM CloudFormation template
+
+        run: |
+
+          set -e
+
+          echo "Validating IAM template..."
+
+          aws cloudformation validate-template \
+            --template-body file://infrastructure/cloudformation/iam.yml \
+            >/dev/null
+
+          echo "IAM template validation successful."
+
+
+      # ------------------------------------------------------
+      # VALIDATE REPORTING
+      # ------------------------------------------------------
+
+      - name: Validate Reporting SAM template
+
+        run: |
+
+          set -e
+
+          echo "Validating Reporting SAM template..."
+
+          sam validate \
+            --template-file "${SAM_REPORT_TEMPLATE}" \
+            --lint
+
+          echo "Reporting template validation successful."
+
+
+      # ------------------------------------------------------
+      # VERIFY REPORT SOURCE
+      # ------------------------------------------------------
+
+      - name: Verify Report Lambda source files
+
+        run: |
+
+          set -e
+
+          echo "Checking Report Lambda source..."
+
+          test -f src/report/lambda_function.py
+
+          test -f src/report/requirements.txt
+
+          echo "Report Lambda source files found."
+
+
+      # ------------------------------------------------------
+      # CHECK REPORT BUCKET
+      # ------------------------------------------------------
+
+      - name: Check Report S3 bucket
+
+        run: |
+
+          set -e
+
+          echo "Checking report bucket..."
+
+          if aws s3api head-bucket \
+            --bucket "${REPORT_BUCKET_NAME}" 2>/dev/null; then
+
+            echo "Report bucket already exists."
+
+          else
+
+            echo "Report bucket does not exist yet."
+
+          fi
+
+
+      # ------------------------------------------------------
+      # SAM BUILD
+      # ------------------------------------------------------
+
+      - name: SAM build
+
+        run: |
+
+          set -e
+
+          echo "Building Report Lambda..."
+
+          sam build \
+            --template-file "${SAM_REPORT_TEMPLATE}" \
+            --use-container
+
+          echo "SAM build successful."
+
+
+      # ------------------------------------------------------
+      # SAM DEPLOY
+      # ------------------------------------------------------
+
+      - name: SAM deploy
+
+        run: |
+
+          set -e
+
+          echo "Deploying CloudMart Reporting Stack..."
+
+          sam deploy \
+            --stack-name "${REPORT_STACK_NAME}" \
+            --template-file .aws-sam/build/template.yaml \
+            --region "${AWS_REGION}" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment="${ENVIRONMENT}" \
+              ReportS3BucketName="${REPORT_BUCKET_NAME}"
+
+          echo "Reporting stack deployed successfully."
+
+
+      # ------------------------------------------------------
+      # DISPLAY OUTPUTS
+      # ------------------------------------------------------
+
+      - name: Display Reporting stack outputs
+
+        run: |
+
+          set -e
+
+          echo "CloudMart Reporting Stack outputs:"
+
+          aws cloudformation describe-stacks \
+            --stack-name "${REPORT_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query "Stacks[0].Outputs" \
+            --output table
+
+
+      # ------------------------------------------------------
+      # VERIFY REPORT LAMBDA
+      # ------------------------------------------------------
+
+      - name: Verify Report Lambda
+
+        run: |
+
+          set -e
+
+          echo "Checking Report Lambda..."
+
+          FUNCTION_NAME="CloudMart-Report-Lambda-${ENVIRONMENT}"
+
+          aws lambda get-function \
+            --function-name "${FUNCTION_NAME}" \
+            --region "${AWS_REGION}" \
+            >/dev/null
+
+          echo "Report Lambda exists successfully."
+
+
+      # ------------------------------------------------------
+      # VERIFY REPORT BUCKET
+      # ------------------------------------------------------
+
+      - name: Verify Report S3 bucket
+
+        run: |
+
+          set -e
+
+          echo "Checking Report S3 bucket..."
+
+          aws s3api head-bucket \
+            --bucket "${REPORT_BUCKET_NAME}"
+
+          echo "Report S3 bucket is accessible."
+
+
+      # ------------------------------------------------------
+      # VERIFY REPORT SCHEDULER
+      # ------------------------------------------------------
+
+      - name: Verify Daily Report Scheduler
+
+        run: |
+
+          set -e
+
+          echo "Checking Daily Report Scheduler..."
+
+          SCHEDULE_NAME="CloudMart-Daily-Report-${ENVIRONMENT}"
+
+          aws scheduler get-schedule \
+            --name "$SCHEDULE_NAME" \
+            --region "$AWS_REGION" \
+            >/dev/null
+
+          echo "Daily Report Scheduler exists successfully."
+
+
+      # ------------------------------------------------------
+      # REPORTING DEPLOYMENT COMPLETE
+      # ------------------------------------------------------
+
+      - name: Reporting deployment complete
+
+        run: |
+
+          echo "=============================================="
+
+          echo "CloudMart Reporting deployment completed."
+
+          echo "=============================================="
+
+          echo "Report Lambda:"
+          echo "CloudMart-Report-Lambda-${ENVIRONMENT}"
+
+          echo ""
+
+          echo "Report Bucket:"
+          echo "${REPORT_BUCKET_NAME}"
+
+          echo ""
+
+          echo "Daily Scheduler:"
+          echo "CloudMart-Daily-Report-${ENVIRONMENT}"
+
+          echo ""
+
+          echo "Schedule:"
+          echo "Every day at 11:00 PM IST"
+
+          echo "=============================================="
+
