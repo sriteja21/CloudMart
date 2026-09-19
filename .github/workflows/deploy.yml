@@ -890,3 +890,255 @@ jobs:
 
           echo "=============================================="
 
+
+  # ========================================================
+  # 9. MONITORING
+  # ========================================================
+
+  monitoring:
+
+    name: Monitoring
+
+    needs: reporting
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ------------------------------------------------------
+      # CHECKOUT
+      # ------------------------------------------------------
+
+      - name: Checkout
+
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # CONFIGURE AWS
+      # ------------------------------------------------------
+
+      - name: Configure AWS
+
+        uses: aws-actions/configure-aws-credentials@v5
+
+        with:
+
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+          aws-region: ${{ env.AWS_REGION }}
+
+          role-session-name: GitHubActions-Monitoring
+
+
+      # ------------------------------------------------------
+      # VERIFY AWS
+      # ------------------------------------------------------
+
+      - name: Verify AWS identity
+
+        run: |
+
+          set -e
+
+          echo "Checking AWS identity..."
+
+          aws sts get-caller-identity
+
+
+      # ------------------------------------------------------
+      # VALIDATE MONITORING TEMPLATE
+      # ------------------------------------------------------
+
+      - name: Validate Monitoring CloudFormation template
+
+        run: |
+
+          set -e
+
+          echo "Validating Monitoring template..."
+
+          aws cloudformation validate-template \
+            --template-body file://infrastructure/cloudformation/monitoring-stack.yml \
+            --region "${AWS_REGION}" \
+            >/dev/null
+
+          echo "Monitoring template validation successful."
+
+
+      # ------------------------------------------------------
+      # DEPLOY MONITORING STACK
+      # ------------------------------------------------------
+
+      - name: Deploy Monitoring Stack
+
+        run: |
+
+          set -e
+
+          echo "Deploying CloudMart Monitoring Stack..."
+
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/monitoring-stack.yml \
+            --stack-name "CloudMart-Monitoring-${ENVIRONMENT}" \
+            --region "${AWS_REGION}" \
+            --parameter-overrides \
+              Environment="${ENVIRONMENT}" \
+            --no-fail-on-empty-changeset
+
+          echo "Monitoring stack deployed successfully."
+
+
+      # ------------------------------------------------------
+      # VERIFY SNS EXPORTS REQUIRED BY MONITORING
+      # ------------------------------------------------------
+
+      - name: Verify Monitoring dependencies
+
+        run: |
+
+          set -e
+
+          echo "Checking required SNS exports..."
+
+          LOW_STOCK_TOPIC=$(aws cloudformation list-exports \
+            --region "${AWS_REGION}" \
+            --query "Exports[?Name=='CloudMart-${ENVIRONMENT}-LowStockTopicArn'].Value | [0]" \
+            --output text)
+
+          ORDER_TOPIC=$(aws cloudformation list-exports \
+            --region "${AWS_REGION}" \
+            --query "Exports[?Name=='CloudMart-${ENVIRONMENT}-OrderNotificationTopicArn'].Value | [0]" \
+            --output text)
+
+          if [ -z "$LOW_STOCK_TOPIC" ] || [ "$LOW_STOCK_TOPIC" = "None" ]; then
+            echo "Missing Low Stock SNS topic export."
+            exit 1
+          fi
+
+          if [ -z "$ORDER_TOPIC" ] || [ "$ORDER_TOPIC" = "None" ]; then
+            echo "Missing Order Notification SNS topic export."
+            exit 1
+          fi
+
+          echo "Low Stock SNS topic: $LOW_STOCK_TOPIC"
+          echo "Order Notification SNS topic: $ORDER_TOPIC"
+          echo "Monitoring dependencies verified."
+
+
+      # ------------------------------------------------------
+      # VERIFY DASHBOARD
+      # ------------------------------------------------------
+
+      - name: Verify CloudWatch dashboard
+
+        run: |
+
+          set -e
+
+          DASHBOARD_NAME="cloudmart-operations-${ENVIRONMENT}"
+
+          echo "Checking CloudWatch dashboard: $DASHBOARD_NAME"
+
+          aws cloudwatch get-dashboard \
+            --dashboard-name "$DASHBOARD_NAME" \
+            --region "${AWS_REGION}" \
+            >/dev/null
+
+          echo "CloudWatch dashboard verified."
+
+
+      # ------------------------------------------------------
+      # VERIFY ALARMS
+      # ------------------------------------------------------
+
+      - name: Verify CloudWatch alarms
+
+        run: |
+
+          set -e
+
+          echo "Checking CloudWatch alarms..."
+
+          for alarm in \
+            "CloudMart-${ENVIRONMENT}-OrdersFailed" \
+            "CloudMart-${ENVIRONMENT}-LowStock" \
+            "CloudMart-${ENVIRONMENT}-OrdersPlaced" \
+            "CloudMart-${ENVIRONMENT}-InventoryUpdated"
+          do
+
+            echo "Checking alarm: $alarm"
+
+            aws cloudwatch describe-alarms \
+              --alarm-names "$alarm" \
+              --region "${AWS_REGION}" \
+              --query "MetricAlarms[0].AlarmName" \
+              --output text \
+              | grep -q "$alarm"
+
+            echo "Verified alarm: $alarm"
+
+          done
+
+          echo "All monitoring alarms verified."
+
+
+      # ------------------------------------------------------
+      # DISPLAY MONITORING STACK OUTPUTS
+      # ------------------------------------------------------
+
+      - name: Display Monitoring stack outputs
+
+        run: |
+
+          set -e
+
+          echo "CloudMart Monitoring Stack outputs:"
+
+          aws cloudformation describe-stacks \
+            --stack-name "CloudMart-Monitoring-${ENVIRONMENT}" \
+            --region "${AWS_REGION}" \
+            --query "Stacks[0].Outputs" \
+            --output table
+
+
+      # ------------------------------------------------------
+      # MONITORING DEPLOYMENT COMPLETE
+      # ------------------------------------------------------
+
+      - name: Monitoring deployment complete
+
+        run: |
+
+          echo "=============================================="
+
+          echo "CloudMart Monitoring deployment completed."
+
+          echo "=============================================="
+
+          echo ""
+
+          echo "Dashboard:"
+          echo "cloudmart-operations-${ENVIRONMENT}"
+
+          echo ""
+
+          echo "Metrics:"
+          echo "  OrdersPlaced"
+          echo "  OrdersFailed"
+          echo "  InventoryUpdated"
+          echo "  LowStockEvents"
+
+          echo ""
+
+          echo "Alarms:"
+          echo "  CloudMart-${ENVIRONMENT}-OrdersFailed"
+          echo "  CloudMart-${ENVIRONMENT}-LowStock"
+          echo "  CloudMart-${ENVIRONMENT}-OrdersPlaced"
+          echo "  CloudMart-${ENVIRONMENT}-InventoryUpdated"
+
+          echo ""
+
+          echo "Monitoring deployment successful."
+
+          echo "=============================================="

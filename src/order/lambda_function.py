@@ -316,6 +316,55 @@ def publish_event(event_type, detail):
         raise
 
 
+
+def publish_metric(metric_name, value=1):
+    """
+    Publish a single CloudWatch operational metric.
+
+    Metric publishing is intentionally best-effort: a CloudWatch publishing
+    failure must not turn an otherwise successful database operation into an
+    API failure.
+    """
+    logger = logging.getLogger()
+
+    try:
+        cloudwatch = boto3.client("cloudwatch")
+
+        cloudwatch.put_metric_data(
+            Namespace="CloudMart/Operations",
+            MetricData=[
+                {
+                    "MetricName": metric_name,
+                    "Dimensions": [
+                        {
+                            "Name": "Environment",
+                            "Value": get_environment()
+                        }
+                    ],
+                    "Value": value,
+                    "Unit": "Count"
+                }
+            ]
+        )
+
+        logger.info(
+            "CloudWatch metric published metric=%s value=%s",
+            metric_name,
+            value
+        )
+
+    except Exception:
+        logger.exception(
+            "CloudWatch metric publishing failed metric=%s value=%s",
+            metric_name,
+            value
+        )
+
+
+def publish_order_failure_metric():
+    publish_metric("OrdersFailed")
+
+
 @log_endpoint
 def create_customer(event):
     data = parse_body(event)
@@ -831,6 +880,8 @@ def create_order(event):
     conn = get_db_connection()
 
     order_id = None
+    inventory_updates = 0
+    low_stock_events = 0
 
     try:
         with conn.cursor() as cur:
@@ -920,7 +971,8 @@ def create_order(event):
                         p.product_id,
                         p.name,
                         p.price,
-                        i.quantity_available
+                        i.quantity_available,
+                        i.reorder_threshold
                     FROM products p
                     JOIN inventory i
                         ON p.product_id=i.product_id
@@ -1025,6 +1077,8 @@ def create_order(event):
                 )
 
                 conn.commit()
+
+                publish_order_failure_metric()
 
                 try:
                     publish_event(
@@ -1166,6 +1220,34 @@ def create_order(event):
                         f"product {product_id}."
                     )
 
+                inventory_updates += 1
+
+                reorder_threshold = int(
+                    product["reorder_threshold"]
+                )
+
+                if (
+                    int(product["available"]) > reorder_threshold
+                    and after_quantity <= reorder_threshold
+                ):
+                    low_stock_events += 1
+
+                logging.getLogger().info(
+                    "Inventory update verified product_id=%s "
+                    "previous_quantity=%s requested_quantity=%s "
+                    "new_quantity=%s reorder_threshold=%s "
+                    "low_stock_transition=%s",
+                    product_id,
+                    product["available"],
+                    quantity,
+                    after_quantity,
+                    reorder_threshold,
+                    (
+                        int(product["available"]) > reorder_threshold
+                        and after_quantity <= reorder_threshold
+                    )
+                )
+
                 order_items.append(
                     {
                         "product_id":
@@ -1217,6 +1299,20 @@ def create_order(event):
             )
 
         conn.commit()
+
+        publish_metric("OrdersPlaced")
+
+        if inventory_updates:
+            publish_metric(
+                "InventoryUpdated",
+                inventory_updates
+            )
+
+        if low_stock_events:
+            publish_metric(
+                "LowStockEvents",
+                low_stock_events
+            )
 
         try:
             publish_event(
@@ -1271,6 +1367,7 @@ def create_order(event):
 
     except Exception:
         conn.rollback()
+        publish_order_failure_metric()
         raise
 
     finally:
@@ -1692,6 +1789,7 @@ def cancel_order(event):
         )
 
     conn = get_db_connection()
+    inventory_restorations = 0
 
     try:
         with conn.cursor() as cur:
@@ -1800,6 +1898,8 @@ def cancel_order(event):
                         f"product {item['product_id']}."
                     )
 
+                inventory_restorations += 1
+
             cur.execute(
                 """
                 UPDATE orders
@@ -1831,6 +1931,12 @@ def cancel_order(event):
             )
 
         conn.commit()
+
+        if inventory_restorations:
+            publish_metric(
+                "InventoryUpdated",
+                inventory_restorations
+            )
 
         try:
             publish_event(

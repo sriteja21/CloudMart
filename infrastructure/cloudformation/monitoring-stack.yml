@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: CloudMart Monitoring, CloudWatch Dashboard, Metrics and Alarms Stack
+
+Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+Resources:
+
+  # ==========================================================
+  # CLOUDWATCH DASHBOARD
+  # ==========================================================
+
+  CloudMartOperationsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub cloudmart-operations-${Environment}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Orders Placed",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  [ "CloudMart/Operations", "OrdersPlaced", "Environment", "${Environment}" ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Orders Failed",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  [ "CloudMart/Operations", "OrdersFailed", "Environment", "${Environment}" ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Inventory Updated",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  [ "CloudMart/Operations", "InventoryUpdated", "Environment", "${Environment}" ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Low Stock Events",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  [ "CloudMart/Operations", "LowStockEvents", "Environment", "${Environment}" ]
+                ]
+              }
+            }
+          ]
+        }
+
+  # ==========================================================
+  # ORDERS FAILED ALARM
+  # ==========================================================
+
+  OrdersFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub CloudMart-${Environment}-OrdersFailed
+      AlarmDescription: Alarm when one or more orders fail.
+      Namespace: CloudMart/Operations
+      MetricName: OrdersFailed
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+
+  # ==========================================================
+  # LOW STOCK ALARM
+  # ==========================================================
+
+  LowStockAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub CloudMart-${Environment}-LowStock
+      AlarmDescription: Alarm when one or more products enter low-stock state.
+      Namespace: CloudMart/Operations
+      MetricName: LowStockEvents
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-LowStockTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-LowStockTopicArn
+
+  # ==========================================================
+  # ORDERS PLACED ACTIVITY ALARM
+  # ==========================================================
+
+  OrdersPlacedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub CloudMart-${Environment}-OrdersPlaced
+      AlarmDescription: Alarm when order activity is detected.
+      Namespace: CloudMart/Operations
+      MetricName: OrdersPlaced
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+
+  # ==========================================================
+  # INVENTORY UPDATED ACTIVITY ALARM
+  # ==========================================================
+
+  InventoryUpdatedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub CloudMart-${Environment}-InventoryUpdated
+      AlarmDescription: Alarm when inventory update activity is detected.
+      Namespace: CloudMart/Operations
+      MetricName: InventoryUpdated
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+
+Outputs:
+
+  OperationsDashboardName:
+    Description: CloudWatch operations dashboard name
+    Value: !Sub cloudmart-operations-${Environment}
+
+  OrdersFailedAlarmName:
+    Description: Orders failed CloudWatch alarm
+    Value: !Ref OrdersFailedAlarm
+
+  LowStockAlarmName:
+    Description: Low stock CloudWatch alarm
+    Value: !Ref LowStockAlarm
+
+  OrdersPlacedAlarmName:
+    Description: Orders placed CloudWatch alarm
+    Value: !Ref OrdersPlacedAlarm
+
+  InventoryUpdatedAlarmName:
+    Description: Inventory updated CloudWatch alarm
+    Value: !Ref InventoryUpdatedAlarm

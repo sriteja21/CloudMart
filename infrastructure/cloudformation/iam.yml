@@ -284,6 +284,21 @@ Resources:
 
 
         # ====================================================
+        # CLOUDWATCH CUSTOM METRICS
+        # ====================================================
+        # Required by Product and Order Lambdas to publish:
+        # OrdersPlaced, OrdersFailed, InventoryUpdated,
+        # and LowStockEvents.
+        - PolicyName: LambdaCloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+        # ====================================================
         # SSM DATABASE PARAMETERS
         # ====================================================
 
