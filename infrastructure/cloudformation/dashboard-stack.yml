@@ -1,0 +1,448 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: CloudMart Dashboard EC2 infrastructure with Nginx and Gunicorn.
+
+# ==========================================================
+# PARAMETERS
+# ==========================================================
+
+Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+
+  ReportS3BucketName:
+    Type: String
+
+  DashboardApiUrl:
+    Type: String
+    Default: ''
+
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
+
+Resources:
+
+  # ========================================================
+  # DASHBOARD SECURITY GROUP
+  # ========================================================
+
+  DashboardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: CloudMart Dashboard web access
+
+      VpcId:
+        Fn::ImportValue: CloudMart-VPC-ID
+
+      SecurityGroupIngress:
+
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: !Sub CloudMart-${Environment}-Dashboard-SG
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ========================================================
+  # DASHBOARD EC2 INSTANCE
+  # ========================================================
+
+  DashboardEC2Instance:
+    Type: AWS::EC2::Instance
+
+    Properties:
+
+      ImageId:
+        !Ref AmiId
+
+      InstanceType:
+        !Ref InstanceType
+
+      KeyName:
+        !Ref KeyName
+
+      SubnetId:
+        Fn::ImportValue: CloudMart-Public-Subnet-ID
+
+      SecurityGroupIds:
+        - !Ref DashboardSecurityGroup
+
+      IamInstanceProfile:
+        Fn::ImportValue:
+          Fn::Sub: CloudMart-DashboardEC2InstanceProfile-${Environment}
+
+      Monitoring: true
+
+      Tags:
+
+        - Key: Name
+          Value: !Sub CloudMart-${Environment}-Dashboard
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+        - Key: Component
+          Value: Dashboard
+
+      # ====================================================
+      # DASHBOARD BOOTSTRAP
+      # ====================================================
+
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+
+            #!/bin/bash
+
+            set -euxo pipefail
+
+            exec > >(tee /var/log/cloudmart-dashboard-userdata.log | logger -t cloudmart-dashboard -s 2>/dev/console) 2>&1
+
+
+            # ==================================================
+            # SYSTEM SETUP
+            # ==================================================
+
+            dnf update -y
+
+            dnf install -y \
+              python3 \
+              python3-pip \
+              nginx \
+              git
+
+            python3 -m pip install --upgrade pip
+
+
+            # ==================================================
+            # APPLICATION DIRECTORY
+            # ==================================================
+
+            rm -rf /opt/cloudmart-dashboard
+
+            mkdir -p /opt/cloudmart-dashboard
+
+            mkdir -p /var/log/cloudmart-dashboard
+
+
+            # ==================================================
+            # CLONE CLOUDMART REPOSITORY
+            # ==================================================
+
+            git clone \
+              https://github.com/sriteja21/CloudMart.git \
+              /opt/cloudmart-dashboard
+
+
+            # ==================================================
+            # VERIFY DASHBOARD APPLICATION
+            # ==================================================
+
+            if [ ! -f /opt/cloudmart-dashboard/src/dashboard/app.py ]; then
+
+              echo "Dashboard application not found."
+
+              exit 1
+
+            fi
+
+
+            if [ ! -f /opt/cloudmart-dashboard/src/dashboard/requirements.txt ]; then
+
+              echo "Dashboard requirements file not found."
+
+              exit 1
+
+            fi
+
+
+            # ==================================================
+            # PYTHON ENVIRONMENT
+            # ==================================================
+
+            python3 -m venv /opt/cloudmart-dashboard/venv
+
+            /opt/cloudmart-dashboard/venv/bin/pip install \
+              --upgrade pip
+
+            /opt/cloudmart-dashboard/venv/bin/pip install \
+              -r /opt/cloudmart-dashboard/src/dashboard/requirements.txt
+
+
+            # ==================================================
+            # DASHBOARD ENVIRONMENT
+            # ==================================================
+
+            cat > /etc/cloudmart-dashboard.env <<ENVEOF
+
+            ENVIRONMENT=${Environment}
+
+            REPORT_BUCKET=${ReportS3BucketName}
+
+            API_URL=${DashboardApiUrl}
+
+            ENVEOF
+
+            chmod 600 /etc/cloudmart-dashboard.env
+
+
+            # ==================================================
+            # GUNICORN SERVICE
+            # ==================================================
+
+            cat > /etc/systemd/system/cloudmart-dashboard.service <<SERVICEEOF
+
+            [Unit]
+
+            Description=CloudMart Dashboard Gunicorn Service
+
+            After=network.target
+
+
+            [Service]
+
+            Type=simple
+
+            User=root
+
+            WorkingDirectory=/opt/cloudmart-dashboard/src/dashboard
+
+            EnvironmentFile=/etc/cloudmart-dashboard.env
+
+            ExecStart=/opt/cloudmart-dashboard/venv/bin/gunicorn \
+              --workers 2 \
+              --bind 127.0.0.1:8000 \
+              --access-logfile /var/log/cloudmart-dashboard/access.log \
+              --error-logfile /var/log/cloudmart-dashboard/error.log \
+              app:app
+
+            Restart=always
+
+            RestartSec=5
+
+
+            [Install]
+
+            WantedBy=multi-user.target
+
+            SERVICEEOF
+
+
+            # ==================================================
+            # NGINX CONFIGURATION
+            # ==================================================
+
+            rm -f /etc/nginx/conf.d/default.conf
+
+            cat > /etc/nginx/conf.d/cloudmart-dashboard.conf <<NGINXEOF
+
+            server {
+
+                listen 80;
+
+                server_name _;
+
+
+                access_log /var/log/nginx/cloudmart-dashboard-access.log;
+
+                error_log /var/log/nginx/cloudmart-dashboard-error.log;
+
+
+                location / {
+
+                    proxy_pass http://127.0.0.1:8000;
+
+                    proxy_http_version 1.1;
+
+                    proxy_set_header Host \$host;
+
+                    proxy_set_header X-Real-IP \$remote_addr;
+
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+
+                    proxy_read_timeout 60s;
+
+                    proxy_connect_timeout 10s;
+
+                }
+
+            }
+
+            NGINXEOF
+
+
+            # ==================================================
+            # NGINX VALIDATION
+            # ==================================================
+
+            nginx -t
+
+
+            # ==================================================
+            # START DASHBOARD
+            # ==================================================
+
+            systemctl daemon-reload
+
+            systemctl enable cloudmart-dashboard
+
+            systemctl start cloudmart-dashboard
+
+
+            # ==================================================
+            # START NGINX
+            # ==================================================
+
+            systemctl enable nginx
+
+            systemctl restart nginx
+
+
+            # ==================================================
+            # HEALTH CHECK
+            # ==================================================
+
+            sleep 5
+
+            curl -f http://127.0.0.1:8000/health
+
+
+            echo "CloudMart Dashboard deployment completed."
+
+
+  # ========================================================
+  # DASHBOARD ELASTIC IP
+  # ========================================================
+
+  DashboardElasticIP:
+    Type: AWS::EC2::EIP
+
+    Properties:
+
+      Domain: vpc
+
+      Tags:
+
+        - Key: Name
+          Value: !Sub CloudMart-${Environment}-Dashboard-EIP
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ========================================================
+  # ELASTIC IP ASSOCIATION
+  # ========================================================
+
+  DashboardElasticIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+
+    Properties:
+
+      AllocationId:
+        !GetAtt DashboardElasticIP.AllocationId
+
+      InstanceId:
+        !Ref DashboardEC2Instance
+
+
+# ==========================================================
+# OUTPUTS
+# ==========================================================
+
+Outputs:
+
+  DashboardInstanceId:
+
+    Description: Dashboard EC2 instance ID
+
+    Value:
+      !Ref DashboardEC2Instance
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardInstanceId-${Environment}
+
+
+  DashboardPublicIP:
+
+    Description: Dashboard public IP address
+
+    Value:
+      !Ref DashboardElasticIP
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardPublicIP-${Environment}
+
+
+  DashboardURL:
+
+    Description: CloudMart Dashboard URL
+
+    Value:
+      !Sub http://${DashboardElasticIP}
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardURL-${Environment}
+
+
+  DashboardSecurityGroupId:
+
+    Description: Dashboard security group ID
+
+    Value:
+      !Ref DashboardSecurityGroup
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardSecurityGroupId-${Environment}

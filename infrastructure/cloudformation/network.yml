@@ -6,27 +6,45 @@ Description: >
   Internet Gateway, security groups, and VPC endpoints.
 
 
+# ============================================================
+# PARAMETERS
+# ============================================================
+
 Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: CloudMart deployment environment
+
 
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
     Description: CIDR block for the CloudMart VPC
 
+
   PublicSubnetCidr:
     Type: String
     Default: 10.0.1.0/24
     Description: CIDR block for the public subnet
+
 
   PrivateSubnetCidr:
     Type: String
     Default: 10.0.2.0/24
     Description: CIDR block for the first private subnet
 
+
   PrivateSubnet2Cidr:
     Type: String
     Default: 10.0.3.0/24
     Description: CIDR block for the second private subnet
+
 
   AdminIp:
     Type: String
@@ -34,30 +52,50 @@ Parameters:
     Description: Public IP address allowed to access EC2 using SSH
 
 
+# ============================================================
+# RESOURCES
+# ============================================================
+
 Resources:
+
+
+  # ==========================================================
+  # VPC
+  # ==========================================================
 
   CloudMartVPC:
     Type: AWS::EC2::VPC
 
     Properties:
       CidrBlock: !Ref VpcCidr
+
       EnableDnsSupport: true
       EnableDnsHostnames: true
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-VPC
+          Value: !Sub CloudMart-${Environment}-VPC
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PUBLIC SUBNET
+  # ==========================================================
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
 
     Properties:
       VpcId: !Ref CloudMartVPC
+
       CidrBlock: !Ref PublicSubnetCidr
+
       MapPublicIpOnLaunch: true
 
       AvailabilityZone:
@@ -66,19 +104,29 @@ Resources:
           - !GetAZs ''
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Public-Subnet
+          Value: !Sub CloudMart-${Environment}-Public-Subnet
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PRIVATE SUBNET 1
+  # ==========================================================
 
   PrivateSubnet:
     Type: AWS::EC2::Subnet
 
     Properties:
       VpcId: !Ref CloudMartVPC
+
       CidrBlock: !Ref PrivateSubnetCidr
+
       MapPublicIpOnLaunch: false
 
       AvailabilityZone:
@@ -87,19 +135,29 @@ Resources:
           - !GetAZs ''
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Private-Subnet-1
+          Value: !Sub CloudMart-${Environment}-Private-Subnet-1
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PRIVATE SUBNET 2
+  # ==========================================================
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
 
     Properties:
       VpcId: !Ref CloudMartVPC
+
       CidrBlock: !Ref PrivateSubnet2Cidr
+
       MapPublicIpOnLaunch: false
 
       AvailabilityZone:
@@ -108,32 +166,53 @@ Resources:
           - !GetAZs ''
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Private-Subnet-2
+          Value: !Sub CloudMart-${Environment}-Private-Subnet-2
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # INTERNET GATEWAY
+  # ==========================================================
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
     Properties:
       Tags:
+
         - Key: Name
-          Value: CloudMart-IGW
+          Value: !Sub CloudMart-${Environment}-IGW
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # VPC GATEWAY ATTACHMENT
+  # ==========================================================
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
 
     Properties:
       VpcId: !Ref CloudMartVPC
+
       InternetGatewayId: !Ref InternetGateway
 
+
+  # ==========================================================
+  # PUBLIC ROUTE TABLE
+  # ==========================================================
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -142,12 +221,20 @@ Resources:
       VpcId: !Ref CloudMartVPC
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Public-RouteTable
+          Value: !Sub CloudMart-${Environment}-Public-RouteTable
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PUBLIC DEFAULT ROUTE
+  # ==========================================================
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -157,17 +244,28 @@ Resources:
 
     Properties:
       RouteTableId: !Ref PublicRouteTable
+
       DestinationCidrBlock: 0.0.0.0/0
+
       GatewayId: !Ref InternetGateway
 
+
+  # ==========================================================
+  # PUBLIC SUBNET ROUTE TABLE ASSOCIATION
+  # ==========================================================
 
   PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
 
     Properties:
       SubnetId: !Ref PublicSubnet
+
       RouteTableId: !Ref PublicRouteTable
 
+
+  # ==========================================================
+  # PRIVATE ROUTE TABLE 1
+  # ==========================================================
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -176,48 +274,94 @@ Resources:
       VpcId: !Ref CloudMartVPC
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Private-RouteTable
+          Value: !Sub CloudMart-${Environment}-Private-RouteTable-1
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PRIVATE ROUTE TABLE 2
+  # ==========================================================
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+
+    Properties:
+      VpcId: !Ref CloudMartVPC
+
+      Tags:
+
+        - Key: Name
+          Value: !Sub CloudMart-${Environment}-Private-RouteTable-2
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # PRIVATE SUBNET 1 ROUTE TABLE ASSOCIATION
+  # ==========================================================
 
   PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
 
     Properties:
       SubnetId: !Ref PrivateSubnet
+
       RouteTableId: !Ref PrivateRouteTable
 
+
+  # ==========================================================
+  # PRIVATE SUBNET 2 ROUTE TABLE ASSOCIATION
+  # ==========================================================
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
 
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
 
+      RouteTableId: !Ref PrivateRouteTable2
+
+
+  # ==========================================================
+  # EC2 SECURITY GROUP
+  # ==========================================================
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
 
     Properties:
-      GroupDescription: Security group for CloudMart Flask Dashboard
+
+      GroupDescription: !Sub >
+        CloudMart ${Environment} EC2 Dashboard Security Group
+
       VpcId: !Ref CloudMartVPC
 
       SecurityGroupIngress:
 
+        # HTTP
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
+        # HTTPS
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
 
+        # SSH
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -229,18 +373,29 @@ Resources:
           CidrIp: 0.0.0.0/0
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-EC2-SG
+          Value: !Sub CloudMart-${Environment}-EC2-SG
 
         - Key: Project
           Value: CloudMart
 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ==========================================================
+  # LAMBDA SECURITY GROUP
+  # ==========================================================
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
 
     Properties:
-      GroupDescription: Security group for CloudMart Lambda functions
+
+      GroupDescription: !Sub >
+        CloudMart ${Environment} Lambda Security Group
+
       VpcId: !Ref CloudMartVPC
 
       SecurityGroupEgress:
@@ -249,21 +404,29 @@ Resources:
           CidrIp: 0.0.0.0/0
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-Lambda-SG
+          Value: !Sub CloudMart-${Environment}-Lambda-SG
 
         - Key: Project
           Value: CloudMart
 
         - Key: Environment
-          Value: dev
+          Value: !Ref Environment
 
+
+  # ==========================================================
+  # RDS SECURITY GROUP
+  # ==========================================================
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
 
     Properties:
-      GroupDescription: Security group for CloudMart RDS MySQL
+
+      GroupDescription: !Sub >
+        CloudMart ${Environment} RDS MySQL Security Group
+
       VpcId: !Ref CloudMartVPC
 
       SecurityGroupEgress:
@@ -272,40 +435,82 @@ Resources:
           CidrIp: 0.0.0.0/0
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-RDS-SG
+          Value: !Sub CloudMart-${Environment}-RDS-SG
 
         - Key: Project
           Value: CloudMart
 
         - Key: Environment
-          Value: dev
+          Value: !Ref Environment
 
+
+  # ==========================================================
+  # LAMBDA -> RDS MYSQL
+  # ==========================================================
 
   LambdaToRDSIngress:
     Type: AWS::EC2::SecurityGroupIngress
 
     Properties:
+
       GroupId: !Ref RDSSecurityGroup
+
       IpProtocol: tcp
+
       FromPort: 3306
       ToPort: 3306
+
       SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
 
-  SSMEndpointSecurityGroup:
+  # ==========================================================
+  # EC2 -> RDS MYSQL
+  # ==========================================================
+
+  EC2ToRDSIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+
+    Properties:
+
+      GroupId: !Ref RDSSecurityGroup
+
+      IpProtocol: tcp
+
+      FromPort: 3306
+      ToPort: 3306
+
+      SourceSecurityGroupId: !Ref EC2SecurityGroup
+
+
+  # ==========================================================
+  # VPC ENDPOINT SECURITY GROUP
+  # ==========================================================
+
+  VPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
 
     Properties:
-      GroupDescription: Security group for CloudMart SSM VPC Endpoint
+
+      GroupDescription: !Sub >
+        CloudMart ${Environment} VPC Endpoint Security Group
+
       VpcId: !Ref CloudMartVPC
 
       SecurityGroupIngress:
 
+        # Lambda -> VPC endpoints
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+        # EC2 -> VPC endpoints
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
 
       SecurityGroupEgress:
 
@@ -313,21 +518,28 @@ Resources:
           CidrIp: 0.0.0.0/0
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-SSM-Endpoint-SG
+          Value: !Sub CloudMart-${Environment}-VPC-Endpoint-SG
 
         - Key: Project
           Value: CloudMart
 
         - Key: Environment
-          Value: dev
+          Value: !Ref Environment
 
+
+  # ==========================================================
+  # SSM INTERFACE ENDPOINT
+  # ==========================================================
 
   SSMEndpoint:
     Type: AWS::EC2::VPCEndpoint
 
     Properties:
+
       VpcId: !Ref CloudMartVPC
+
       VpcEndpointType: Interface
 
       ServiceName:
@@ -336,60 +548,64 @@ Resources:
       PrivateDnsEnabled: true
 
       SubnetIds:
+
         - !Ref PrivateSubnet
         - !Ref PrivateSubnet2
 
       SecurityGroupIds:
-        - !Ref SSMEndpointSecurityGroup
 
-      Tags:
-        - Key: Name
-          Value: CloudMart-SSM-Endpoint
+        - !Ref VPCEndpointSecurityGroup
 
-        - Key: Project
-          Value: CloudMart
 
-        - Key: Environment
-          Value: dev
-
+  # ==========================================================
+  # S3 GATEWAY ENDPOINT
+  # ==========================================================
 
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
 
     Properties:
+
       VpcId: !Ref CloudMartVPC
+
       VpcEndpointType: Gateway
 
       ServiceName:
         !Sub com.amazonaws.${AWS::Region}.s3
 
       RouteTableIds:
+
         - !Ref PrivateRouteTable
+        - !Ref PrivateRouteTable2
 
-      Tags:
-        - Key: Name
-          Value: CloudMart-S3-Endpoint
 
-        - Key: Project
-          Value: CloudMart
-
-        - Key: Environment
-          Value: dev
-
+  # ==========================================================
+  # EVENTBRIDGE ENDPOINT SECURITY GROUP
+  # ==========================================================
 
   EventBridgeEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
 
     Properties:
-      GroupDescription: Security group for CloudMart EventBridge VPC Endpoint
+
+      GroupDescription: !Sub >
+        CloudMart ${Environment} EventBridge Endpoint Security Group
+
       VpcId: !Ref CloudMartVPC
 
       SecurityGroupIngress:
 
+        # Lambda -> EventBridge
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+        # EC2 -> EventBridge
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
 
       SecurityGroupEgress:
 
@@ -397,21 +613,28 @@ Resources:
           CidrIp: 0.0.0.0/0
 
       Tags:
+
         - Key: Name
-          Value: CloudMart-EventBridge-Endpoint-SG
+          Value: !Sub CloudMart-${Environment}-EventBridge-Endpoint-SG
 
         - Key: Project
           Value: CloudMart
 
         - Key: Environment
-          Value: dev
+          Value: !Ref Environment
 
+
+  # ==========================================================
+  # EVENTBRIDGE INTERFACE ENDPOINT
+  # ==========================================================
 
   EventBridgeEndpoint:
     Type: AWS::EC2::VPCEndpoint
 
     Properties:
+
       VpcId: !Ref CloudMartVPC
+
       VpcEndpointType: Interface
 
       ServiceName:
@@ -420,104 +643,316 @@ Resources:
       PrivateDnsEnabled: true
 
       SubnetIds:
+
         - !Ref PrivateSubnet
         - !Ref PrivateSubnet2
 
       SecurityGroupIds:
+
         - !Ref EventBridgeEndpointSecurityGroup
 
-      Tags:
-        - Key: Name
-          Value: CloudMart-EventBridge-Endpoint
 
-        - Key: Project
-          Value: CloudMart
+  # ==========================================================
+  # CLOUDWATCH MONITORING ENDPOINT
+  # ==========================================================
+  #
+  # Required for CloudWatch metric API calls such as:
+  #
+  # cloudwatch:PutMetricData
+  #
+  # from resources inside the VPC.
+  #
+  # ==========================================================
 
-        - Key: Environment
-          Value: dev
+  CloudWatchMonitoringEndpoint:
+    Type: AWS::EC2::VPCEndpoint
 
+    Properties:
+
+      VpcId: !Ref CloudMartVPC
+
+      VpcEndpointType: Interface
+
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.monitoring
+
+      PrivateDnsEnabled: true
+
+      SubnetIds:
+
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+
+      SecurityGroupIds:
+
+        - !Ref VPCEndpointSecurityGroup
+
+
+  # ==========================================================
+  # CLOUDWATCH LOGS ENDPOINT
+  # ==========================================================
+
+  CloudWatchLogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+
+    Properties:
+
+      VpcId: !Ref CloudMartVPC
+
+      VpcEndpointType: Interface
+
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.logs
+
+      PrivateDnsEnabled: true
+
+      SubnetIds:
+
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+
+      SecurityGroupIds:
+
+        - !Ref VPCEndpointSecurityGroup
+
+
+# ============================================================
+# OUTPUTS
+# ============================================================
 
 Outputs:
 
+
+  # ==========================================================
+  # ENVIRONMENT
+  # ==========================================================
+
+  Environment:
+    Description: CloudMart deployment environment
+
+    Value:
+      !Ref Environment
+
+
+  # ==========================================================
+  # VPC
+  # ==========================================================
+
   VPCId:
     Description: CloudMart VPC ID
-    Value: !Ref CloudMartVPC
+
+    Value:
+      !Ref CloudMartVPC
+
     Export:
       Name: CloudMart-VPC-ID
 
 
+  # ==========================================================
+  # PUBLIC SUBNET
+  # ==========================================================
+
   PublicSubnetId:
     Description: CloudMart Public Subnet ID
-    Value: !Ref PublicSubnet
+
+    Value:
+      !Ref PublicSubnet
+
     Export:
       Name: CloudMart-Public-Subnet-ID
 
 
+  # ==========================================================
+  # PRIVATE SUBNET 1
+  # ==========================================================
+
   PrivateSubnetId:
     Description: CloudMart Private Subnet 1 ID
-    Value: !Ref PrivateSubnet
+
+    Value:
+      !Ref PrivateSubnet
+
     Export:
       Name: CloudMart-Private-Subnet-ID
 
 
+  # ==========================================================
+  # PRIVATE SUBNET 2
+  # ==========================================================
+
   PrivateSubnet2Id:
     Description: CloudMart Private Subnet 2 ID
-    Value: !Ref PrivateSubnet2
+
+    Value:
+      !Ref PrivateSubnet2
+
     Export:
       Name: CloudMart-Private-Subnet-2-ID
 
 
+  # ==========================================================
+  # PUBLIC ROUTE TABLE
+  # ==========================================================
+
   PublicRouteTableId:
     Description: CloudMart Public Route Table ID
-    Value: !Ref PublicRouteTable
+
+    Value:
+      !Ref PublicRouteTable
+
     Export:
       Name: CloudMart-Public-RouteTable-ID
 
 
+  # ==========================================================
+  # PRIVATE ROUTE TABLE 1
+  # ==========================================================
+
   PrivateRouteTableId:
-    Description: CloudMart Private Route Table ID
-    Value: !Ref PrivateRouteTable
+    Description: CloudMart Private Route Table 1 ID
+
+    Value:
+      !Ref PrivateRouteTable
+
     Export:
       Name: CloudMart-Private-RouteTable-ID
 
 
+  # ==========================================================
+  # PRIVATE ROUTE TABLE 2
+  # ==========================================================
+
+  PrivateRouteTable2Id:
+    Description: CloudMart Private Route Table 2 ID
+
+    Value:
+      !Ref PrivateRouteTable2
+
+    Export:
+      Name: CloudMart-Private-RouteTable-2-ID
+
+
+  # ==========================================================
+  # EC2 SECURITY GROUP
+  # ==========================================================
+
   EC2SecurityGroupId:
     Description: CloudMart EC2 Security Group ID
-    Value: !Ref EC2SecurityGroup
+
+    Value:
+      !Ref EC2SecurityGroup
+
     Export:
       Name: CloudMart-EC2-SG-ID
 
 
+  # ==========================================================
+  # LAMBDA SECURITY GROUP
+  # ==========================================================
+
   LambdaSecurityGroupId:
     Description: CloudMart Lambda Security Group ID
-    Value: !Ref LambdaSecurityGroup
+
+    Value:
+      !Ref LambdaSecurityGroup
+
     Export:
       Name: CloudMart-Lambda-SG-ID
 
 
+  # ==========================================================
+  # RDS SECURITY GROUP
+  # ==========================================================
+
   RDSSecurityGroupId:
     Description: CloudMart RDS Security Group ID
-    Value: !Ref RDSSecurityGroup
+
+    Value:
+      !Ref RDSSecurityGroup
+
     Export:
       Name: CloudMart-RDS-SG-ID
 
 
+  # ==========================================================
+  # VPC ENDPOINT SECURITY GROUP
+  # ==========================================================
+
+  VPCEndpointSecurityGroupId:
+    Description: CloudMart VPC Endpoint Security Group ID
+
+    Value:
+      !Ref VPCEndpointSecurityGroup
+
+    Export:
+      Name: CloudMart-VPC-Endpoint-SG-ID
+
+
+  # ==========================================================
+  # SSM ENDPOINT
+  # ==========================================================
+
   SSMEndpointId:
     Description: CloudMart SSM VPC Endpoint ID
-    Value: !Ref SSMEndpoint
+
+    Value:
+      !Ref SSMEndpoint
+
     Export:
       Name: CloudMart-SSM-Endpoint-ID
 
 
+  # ==========================================================
+  # S3 ENDPOINT
+  # ==========================================================
+
   S3EndpointId:
     Description: CloudMart S3 VPC Endpoint ID
-    Value: !Ref S3Endpoint
+
+    Value:
+      !Ref S3Endpoint
+
     Export:
       Name: CloudMart-S3-Endpoint-ID
 
 
+  # ==========================================================
+  # EVENTBRIDGE ENDPOINT
+  # ==========================================================
+
   EventBridgeEndpointId:
     Description: CloudMart EventBridge VPC Endpoint ID
-    Value: !Ref EventBridgeEndpoint
+
+    Value:
+      !Ref EventBridgeEndpoint
+
     Export:
       Name: CloudMart-EventBridge-Endpoint-ID
+
+
+  # ==========================================================
+  # CLOUDWATCH MONITORING ENDPOINT
+  # ==========================================================
+
+  CloudWatchMonitoringEndpointId:
+    Description: CloudMart CloudWatch Monitoring VPC Endpoint ID
+
+    Value:
+      !Ref CloudWatchMonitoringEndpoint
+
+    Export:
+      Name: CloudMart-CloudWatch-Monitoring-Endpoint-ID
+
+
+  # ==========================================================
+  # CLOUDWATCH LOGS ENDPOINT
+  # ==========================================================
+
+  CloudWatchLogsEndpointId:
+    Description: CloudMart CloudWatch Logs VPC Endpoint ID
+
+    Value:
+      !Ref CloudWatchLogsEndpoint
+
+    Export:
+      Name: CloudMart-CloudWatch-Logs-Endpoint-ID

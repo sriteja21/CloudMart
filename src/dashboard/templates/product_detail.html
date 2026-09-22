@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Product Details{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← Back</a>
+<h1>Product Details</h1>
+{% if product.error %}
+<div class="alert error">{{ product.error }}</div>
+{% endif %}
+<section class="detail-card">
+    {% for key, value in product.items() %}
+    {% if key != "error" %}
+    <div><span>{{ key|replace("_", " ")|title }}</span><strong>{{ value }}</strong></div>
+    {% endif %}
+    {% endfor %}
+</section>
+{% endblock %}

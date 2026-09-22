@@ -458,7 +458,15 @@ Resources:
 
                 Resource:
 
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/host
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/port
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/name
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/username
+
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/password
 
 
         # ====================================================
@@ -638,6 +646,115 @@ Resources:
 
 
   # ========================================================
+  # DASHBOARD EC2 IAM ROLE
+  # ========================================================
+
+  DashboardEC2Role:
+    Type: AWS::IAM::Role
+
+    Properties:
+      RoleName:
+        !Sub CloudMart-Dashboard-EC2-Role-${Environment}
+
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      Policies:
+
+        - PolicyName: DashboardS3ReportReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${ReportS3BucketName}
+
+        - PolicyName: DashboardCloudWatchMetricsRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:DescribeAlarms
+                Resource: '*'
+
+        - PolicyName: DashboardCloudWatchLogsRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource:
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-*
+
+        - PolicyName: DashboardSSMReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/s3/report-bucket
+
+        - PolicyName: DashboardEC2ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                  - ec2:DescribeTags
+                Resource: '*'
+
+      Tags:
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub CloudMart-${Environment}-Dashboard-EC2-Role
+
+
+  # ========================================================
+  # DASHBOARD EC2 INSTANCE PROFILE
+  # ========================================================
+
+  DashboardEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+
+    Properties:
+      InstanceProfileName:
+        !Sub CloudMart-Dashboard-EC2-Profile-${Environment}
+      Roles:
+        - !Ref DashboardEC2Role
+
+
+  # ========================================================
   # CLOUDFORMATION EXECUTION ROLE
   # ========================================================
 
@@ -736,6 +853,7 @@ Resources:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Lambda-Authorizer-Role-${Environment}
 
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Report-Lambda-Role-${Environment}
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/CloudMart-Dashboard-EC2-Role-${Environment}
 
 
               # ==================================================
@@ -989,6 +1107,39 @@ Outputs:
     Export:
       Name:
         !Sub CloudMart-ReportLambdaExecutionRoleArn-${Environment}
+
+  # --------------------------------------------------------
+  # DASHBOARD EC2 ROLE ARN
+  # --------------------------------------------------------
+
+  DashboardEC2RoleArn:
+
+    Description:
+      Dashboard EC2 IAM role ARN
+
+    Value:
+      !GetAtt DashboardEC2Role.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardEC2RoleArn-${Environment}
+
+
+  # --------------------------------------------------------
+  # DASHBOARD EC2 INSTANCE PROFILE ARN
+  # --------------------------------------------------------
+
+  DashboardEC2InstanceProfileArn:
+
+    Description:
+      Dashboard EC2 instance profile ARN
+
+    Value:
+      !GetAtt DashboardEC2InstanceProfile.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardEC2InstanceProfileArn-${Environment}
 
 
   # --------------------------------------------------------

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}CloudMart — Overview{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>Operations Dashboard</h1>
+        <p class="muted">Live view of CloudMart operations</p>
+    </div>
+    <button class="refresh" onclick="window.location.reload()">Refresh</button>
+</header>
+
+{% if data.error %}
+<div class="alert error">Dashboard data error: {{ data.error }}</div>
+{% endif %}
+
+<section class="cards">
+    <div class="card"><span>Products</span><strong>{{ data.products|length }}</strong></div>
+    <div class="card"><span>Customers</span><strong>{{ data.customers|length }}</strong></div>
+    <div class="card"><span>Orders</span><strong>{{ data.orders|length }}</strong></div>
+    <div class="card"><span>Inventory Units</span><strong>{{ data.total_inventory }}</strong></div>
+    <div class="card"><span>Revenue</span><strong>₹{{ "%.2f"|format(data.total_revenue) }}</strong></div>
+    <div class="card danger"><span>Low Stock</span><strong>{{ data.low_stock|length }}</strong></div>
+</section>
+
+<div class="grid">
+    <section class="panel">
+        <div class="panel-head">
+            <h2>Low Stock</h2>
+            <span class="badge danger-badge">{{ data.low_stock|length }}</span>
+        </div>
+        {% if data.low_stock %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Product</th><th>Available</th><th>Threshold</th></tr></thead>
+                <tbody>
+                {% for p in data.low_stock %}
+                <tr class="clickable" onclick="location.href='{{ url_for('product_detail', product_id=p.product_id) }}'">
+                    <td>{{ p.name }}</td>
+                    <td>{{ p.quantity_available }}</td>
+                    <td>{{ p.reorder_threshold }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No low-stock products.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><h2>Most Valuable Products</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Product</th><th>Price</th><th>Stock</th></tr></thead>
+                <tbody>
+                {% for p in data.top_products %}
+                <tr class="clickable" onclick="location.href='{{ url_for('product_detail', product_id=p.product_id) }}'">
+                    <td>{{ p.name }}</td>
+                    <td>₹{{ p.price }}</td>
+                    <td>{{ p.quantity_available }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3">No product data.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<section class="panel">
+    <div class="panel-head"><h2>Recent Orders</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+            {% for o in data.orders[:10] %}
+            <tr class="clickable"
+                onclick="location.href='{{ url_for('order_detail', order_id=o.order_id) }}'">
+                <td>{{ o.order_number or o.order_id }}</td>
+                <td>{{ o.customer_id or "—" }}</td>
+                <td><span class="status">{{ o.status or "—" }}</span></td>
+                <td>₹{{ o.total_amount or o.total or "0" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No order data available.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-head"><h2>Customers</h2></div>
+    <div class="customer-grid">
+        {% for c in data.customers[:12] %}
+        <div class="customer clickable"
+             onclick="location.href='{{ url_for('customer_detail', customer_id=c.customer_id) }}'">
+            <div class="avatar">{{ (c.name or "C")[0]|upper }}</div>
+            <div>
+                <strong>{{ c.name or "Customer " ~ c.customer_id }}</strong>
+                <small>{{ c.email or "No email" }}</small>
+            </div>
+        </div>
+        {% else %}
+        <p class="empty">No customer data available.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
