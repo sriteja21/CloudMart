@@ -109,7 +109,7 @@ Resources:
 
       IamInstanceProfile:
         Fn::ImportValue:
-          Fn::Sub: CloudMart-DashboardEC2InstanceProfile-${Environment}
+          Fn::Sub: CloudMart-DashboardEC2InstanceProfileArn-${Environment}
 
       Monitoring: true
 
