@@ -342,8 +342,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: !Sub >
-        CloudMart ${Environment} EC2 Dashboard Security Group
+      GroupDescription: CloudMart EC2 Dashboard Security Group
 
       VpcId: !Ref CloudMartVPC
 
@@ -393,7 +392,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: CloudMart Lambda Security Group
+      GroupDescription: Security group for CloudMart Lambda functions
 
       VpcId: !Ref CloudMartVPC
 
