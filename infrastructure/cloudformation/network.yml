@@ -393,8 +393,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: !Sub >
-        CloudMart ${Environment} Lambda Security Group
+      GroupDescription: CloudMart Lambda Security Group
 
       VpcId: !Ref CloudMartVPC
 
@@ -424,8 +423,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: !Sub >
-        CloudMart ${Environment} RDS MySQL Security Group
+      GroupDescription: CloudMart RDS MySQL Security Group
 
       VpcId: !Ref CloudMartVPC
 
@@ -493,8 +491,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: !Sub >
-        CloudMart ${Environment} VPC Endpoint Security Group
+      GroupDescription: CloudMart VPC Endpoint Security Group
 
       VpcId: !Ref CloudMartVPC
 
@@ -588,8 +585,7 @@ Resources:
 
     Properties:
 
-      GroupDescription: !Sub >
-        CloudMart ${Environment} EventBridge Endpoint Security Group
+      GroupDescription: CloudMart EventBridge Endpoint Security Group
 
       VpcId: !Ref CloudMartVPC
 
