@@ -1,3 +1,4 @@
+
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: CloudMart Dashboard EC2 Stack
@@ -22,7 +23,9 @@ Resources:
   # ==========================================================
   # DASHBOARD EC2 INSTANCE
   #
-  # IAM Role and Instance Profile are created in iam.yml.
+  # IAM Role and Instance Profile are created centrally
+  # in iam.yml.
+  #
   # This stack imports the existing Instance Profile.
   # ==========================================================
 
@@ -32,13 +35,14 @@ Resources:
     Properties:
 
       # ========================================================
-      # INSTANCE CONFIGURATION
+      # EC2 CONFIGURATION
       # ========================================================
 
       InstanceType: t3.micro
 
       # Ubuntu 24.04 LTS - ap-south-1
       ImageId: ami-0e35ddab05955cf57
+
 
       # ========================================================
       # EXISTING IAM INSTANCE PROFILE
@@ -49,21 +53,26 @@ Resources:
         Fn::ImportValue:
           !Sub CloudMart-DashboardEC2InstanceProfileArn-${Environment}
 
+
       # ========================================================
       # SECURITY GROUP
+      # Created by network stack
       # ========================================================
 
       SecurityGroupIds:
         - Fn::ImportValue:
             CloudMart-EC2-SG-ID
 
+
       # ========================================================
       # PUBLIC SUBNET
+      # Created by network stack
       # ========================================================
 
       SubnetId:
         Fn::ImportValue:
           CloudMart-Public-Subnet-ID
+
 
       # ========================================================
       # EC2 TAGS
@@ -79,6 +88,7 @@ Resources:
 
         - Key: Environment
           Value: !Ref Environment
+
 
       # ========================================================
       # USER DATA
@@ -109,8 +119,8 @@ Resources:
             export AWS_REGION="${AWS::Region}"
             export AWS_DEFAULT_REGION="${AWS::Region}"
 
-            echo "AWS_REGION=${AWS_REGION}"
-            echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+            echo "AWS_REGION=${!AWS_REGION}"
+            echo "AWS_DEFAULT_REGION=${!AWS_DEFAULT_REGION}"
 
 
             # ==================================================
@@ -118,6 +128,8 @@ Resources:
             # ==================================================
 
             echo "Waiting for network..."
+
+            NETWORK_READY=false
 
             for i in $(seq 1 30)
             do
@@ -127,15 +139,31 @@ Resources:
 
                 echo "Network is available."
 
+                NETWORK_READY=true
+
                 break
 
               fi
 
-              echo "Waiting for network... attempt ${i}/30"
+              echo "Waiting for network... attempt ${!i}/30"
 
               sleep 5
 
             done
+
+
+            # ==================================================
+            # NETWORK FAILURE CHECK
+            # ==================================================
+
+            if [ "${!NETWORK_READY}" != "true" ]
+            then
+
+              echo "ERROR: Network did not become available."
+
+              exit 1
+
+            fi
 
 
             # ==================================================
@@ -147,6 +175,7 @@ Resources:
             echo "Updating apt packages..."
 
             apt-get update -y
+
 
             echo "Installing required packages..."
 
@@ -184,6 +213,20 @@ Resources:
 
 
             # ==================================================
+            # VERIFY REPOSITORY
+            # ==================================================
+
+            if [ ! -d /home/ubuntu/CloudMart ]
+            then
+
+              echo "ERROR: CloudMart repository was not cloned."
+
+              exit 1
+
+            fi
+
+
+            # ==================================================
             # SET OWNERSHIP
             # ==================================================
 
@@ -218,6 +261,20 @@ Resources:
 
 
             # ==================================================
+            # VERIFY FLASK APPLICATION
+            # ==================================================
+
+            if [ ! -f app.py ]
+            then
+
+              echo "ERROR: app.py not found."
+
+              exit 1
+
+            fi
+
+
+            # ==================================================
             # PYTHON VIRTUAL ENVIRONMENT
             # ==================================================
 
@@ -232,17 +289,20 @@ Resources:
             # INSTALL PYTHON DEPENDENCIES
             # ==================================================
 
-            echo "Installing Python dependencies..."
+            echo "Upgrading pip..."
 
             /home/ubuntu/CloudMart/venv/bin/pip install \
               --upgrade pip
+
+
+            echo "Installing dashboard dependencies..."
 
             /home/ubuntu/CloudMart/venv/bin/pip install \
               -r requirements.txt
 
 
             # ==================================================
-            # DASHBOARD ENVIRONMENT
+            # DASHBOARD ENVIRONMENT FILE
             # ==================================================
 
             echo "Creating dashboard environment configuration..."
@@ -260,6 +320,23 @@ Resources:
             ENVEOF
 
             chmod 600 /etc/cloudmart-dashboard.env
+
+
+            # ==================================================
+            # CREATE DASHBOARD LOG FILES
+            # ==================================================
+
+            echo "Creating dashboard log files..."
+
+            touch /var/log/cloudmart-dashboard.log
+
+            touch /var/log/cloudmart-dashboard-error.log
+
+            chown ubuntu:ubuntu \
+              /var/log/cloudmart-dashboard.log
+
+            chown ubuntu:ubuntu \
+              /var/log/cloudmart-dashboard-error.log
 
 
             # ==================================================
@@ -305,21 +382,6 @@ Resources:
 
 
             # ==================================================
-            # CREATE LOG FILES
-            # ==================================================
-
-            touch /var/log/cloudmart-dashboard.log
-
-            touch /var/log/cloudmart-dashboard-error.log
-
-            chown ubuntu:ubuntu \
-              /var/log/cloudmart-dashboard.log
-
-            chown ubuntu:ubuntu \
-              /var/log/cloudmart-dashboard-error.log
-
-
-            # ==================================================
             # NGINX CONFIGURATION
             # ==================================================
 
@@ -337,6 +399,7 @@ Resources:
                 listen [::]:80 default_server;
 
                 server_name _;
+
 
                 access_log /var/log/nginx/cloudmart-dashboard-access.log;
 
@@ -378,7 +441,7 @@ Resources:
 
 
             # ==================================================
-            # TEST NGINX
+            # TEST NGINX CONFIGURATION
             # ==================================================
 
             echo "Testing Nginx configuration..."
@@ -387,10 +450,10 @@ Resources:
 
 
             # ==================================================
-            # START DASHBOARD
+            # ENABLE DASHBOARD SERVICE
             # ==================================================
 
-            echo "Starting CloudMart Dashboard..."
+            echo "Enabling CloudMart Dashboard service..."
 
             systemctl daemon-reload
 
@@ -400,7 +463,7 @@ Resources:
 
 
             # ==================================================
-            # CHECK FLASK SERVICE
+            # CHECK DASHBOARD SERVICE
             # ==================================================
 
             sleep 5
@@ -420,13 +483,17 @@ Resources:
 
               cat /var/log/cloudmart-dashboard-error.log || true
 
+              echo "========== DASHBOARD OUTPUT LOG =========="
+
+              cat /var/log/cloudmart-dashboard.log || true
+
               exit 1
 
             fi
 
 
             # ==================================================
-            # START NGINX
+            # ENABLE NGINX
             # ==================================================
 
             echo "Starting Nginx..."
@@ -458,7 +525,7 @@ Resources:
 
               fi
 
-              echo "Waiting for Flask... attempt ${i}/30"
+              echo "Waiting for Flask... attempt ${!i}/30"
 
               sleep 2
 
@@ -469,7 +536,7 @@ Resources:
             # FLASK FAILURE CHECK
             # ==================================================
 
-            if [ "${FLASK_READY}" != "true" ]
+            if [ "${!FLASK_READY}" != "true" ]
             then
 
               echo "ERROR: Flask application did not start."
@@ -547,14 +614,14 @@ Resources:
 
 
             echo "=========================================="
-            echo "Flask Service Status"
+            echo "CloudMart Dashboard Service"
             echo "=========================================="
 
             systemctl --no-pager status cloudmart-dashboard || true
 
 
             echo "=========================================="
-            echo "Nginx Service Status"
+            echo "Nginx Service"
             echo "=========================================="
 
             systemctl --no-pager status nginx || true
@@ -606,3 +673,4 @@ Outputs:
   DashboardInstanceId:
     Description: Dashboard EC2 Instance ID
     Value: !Ref Ec2Dashboard
+
