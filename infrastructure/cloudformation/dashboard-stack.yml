@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Dashboard EC2 infrastructure with Ubuntu, Flask and Nginx.
+Description: CloudMart Dashboard EC2 infrastructure with Nginx and Flask.
 
 Parameters:
 
@@ -8,27 +8,21 @@ Parameters:
     Type: String
     Default: dev
 
-  AmiId:
-    Type: AWS::EC2::Image::Id
-    Description: Ubuntu AMI ID for the EC2 instance
-
-  InstanceType:
+  DashboardInstanceType:
     Type: String
     Default: t3.micro
 
-  KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 key pair for SSH access
+  DashboardAMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-ubuntu-latest/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
 
   DashboardApiUrl:
     Type: String
-    Default: ''
-    Description: CloudMart API Gateway URL
+    Default: ""
 
   ReportS3BucketName:
     Type: String
     Default: cloudmart-dev-reports-test
-
 
 Resources:
 
@@ -36,7 +30,7 @@ Resources:
   # DASHBOARD EC2 INSTANCE
   # ==========================================================
 
-  DashboardEC2Instance:
+  Ec2DashboardV:
     Type: AWS::EC2::Instance
 
     DeletionPolicy: Retain
@@ -44,32 +38,23 @@ Resources:
 
     Properties:
 
-      InstanceType: !Ref InstanceType
+      InstanceType:
+        !Ref DashboardInstanceType
 
-      ImageId: !Ref AmiId
+      ImageId:
+        !Ref DashboardAMI
 
-      KeyName: !Ref KeyName
-
-      # ======================================================
-      # USE EXISTING INSTANCE PROFILE FROM IAM STACK
-      # ======================================================
-
+      # Existing IAM Instance Profile from IAM stack
       IamInstanceProfile:
         Fn::ImportValue: !Sub
           - CloudMart-DashboardEC2InstanceProfileArn-${Env}
           - Env: !Ref Environment
 
-      # ======================================================
-      # USE EXISTING EC2 SECURITY GROUP
-      # ======================================================
-
+      # Existing EC2 Security Group
       SecurityGroupIds:
         - Fn::ImportValue: CloudMart-EC2-SG
 
-      # ======================================================
-      # USE EXISTING PUBLIC SUBNET
-      # ======================================================
-
+      # Existing public subnet
       SubnetId:
         Fn::ImportValue: CloudMart-Public-Subnet-ID
 
@@ -80,24 +65,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-        - Key: Project
-          Value: CloudMart
-
-      # ======================================================
-      # UBUNTU USER DATA
-      # ======================================================
-
       UserData:
         Fn::Base64:
-          Fn::Sub: |
+          !Sub |
 
             #!/bin/bash
 
             set -euxo pipefail
-
-            # ==================================================
-            # LOGGING
-            # ==================================================
 
             exec > >(tee /var/log/cloudmart-dashboard-userdata.log | logger -t cloudmart-dashboard -s 2>/dev/console) 2>&1
 
@@ -109,39 +83,117 @@ Resources:
 
 
             # ==================================================
-            # SYSTEM PACKAGES
+            # 1. INSTALL REQUIRED PACKAGES
             # ==================================================
 
-            echo "[1/8] Installing required packages..."
+            echo "[1/9] Installing required packages..."
 
             export DEBIAN_FRONTEND=noninteractive
 
             apt-get update -y
 
             apt-get install -y \
+              git \
+              nginx \
               python3 \
               python3-pip \
               python3-venv \
-              nginx \
-              git \
               curl \
-              unzip
-
+              mariadb-client
 
             echo "Required packages installed."
 
             python3 --version
-
             git --version
-
             nginx -v
 
 
             # ==================================================
-            # AWS REGION
+            # 2. PREPARE DASHBOARD DIRECTORY
             # ==================================================
 
-            echo "[2/8] Configuring AWS environment..."
+            echo "[2/9] Preparing dashboard directory..."
+
+            rm -rf /opt/cloudmart-dashboard
+
+            mkdir -p /opt/cloudmart-dashboard
+
+            mkdir -p /var/log/cloudmart-dashboard
+
+
+            # ==================================================
+            # 3. CLONE DASHBOARD BRANCH
+            # ==================================================
+
+            echo "[3/9] Cloning dashboard branch..."
+
+            cd /opt
+
+            git clone \
+              --branch monitor \
+              --single-branch \
+              https://github.com/KundellaAnjali/cloudmart.git \
+              cloudmart-dashboard
+
+            echo "Repository cloned successfully."
+
+            cd /opt/cloudmart-dashboard
+
+            echo "Current branch:"
+            git branch --show-current
+
+            echo "Latest commit:"
+            git log -1 --oneline
+
+
+            # ==================================================
+            # 4. VERIFY DASHBOARD FILES
+            # ==================================================
+
+            echo "[4/9] Checking dashboard files..."
+
+            if [ ! -f /opt/cloudmart-dashboard/dashboard/app.py ]; then
+
+              echo "ERROR: dashboard/app.py not found."
+
+              find /opt/cloudmart-dashboard -maxdepth 3 -type f | sort
+
+              exit 1
+
+            fi
+
+            if [ ! -f /opt/cloudmart-dashboard/dashboard/requirements.txt ]; then
+
+              echo "ERROR: dashboard/requirements.txt not found."
+
+              exit 1
+
+            fi
+
+            echo "Dashboard files found."
+
+
+            # ==================================================
+            # 5. PYTHON VIRTUAL ENVIRONMENT
+            # ==================================================
+
+            echo "[5/9] Creating Python virtual environment..."
+
+            python3 -m venv /opt/cloudmart-dashboard/venv
+
+            /opt/cloudmart-dashboard/venv/bin/pip install --upgrade pip
+
+            /opt/cloudmart-dashboard/venv/bin/pip install \
+              -r /opt/cloudmart-dashboard/dashboard/requirements.txt
+
+            echo "Python dependencies installed."
+
+
+            # ==================================================
+            # 6. DASHBOARD ENVIRONMENT VARIABLES
+            # ==================================================
+
+            echo "[6/9] Creating dashboard environment..."
 
             cat > /etc/cloudmart-dashboard.env <<ENVEOF
 
@@ -155,90 +207,12 @@ Resources:
 
             chmod 600 /etc/cloudmart-dashboard.env
 
-            cat /etc/cloudmart-dashboard.env
-
 
             # ==================================================
-            # APPLICATION DIRECTORY
+            # 7. FLASK SYSTEMD SERVICE
             # ==================================================
 
-            echo "[3/8] Preparing dashboard directory..."
-
-            rm -rf /opt/cloudmart-dashboard
-
-            mkdir -p /opt/cloudmart-dashboard
-
-            mkdir -p /var/log/cloudmart-dashboard
-
-
-            # ==================================================
-            # CLONE DASHBOARD BRANCH
-            # ==================================================
-
-            echo "[4/8] Cloning dashboard branch..."
-
-            git clone \
-              --branch dashboard \
-              --single-branch \
-              https://github.com/sriteja21/CloudMart.git \
-              /opt/cloudmart-dashboard
-
-            cd /opt/cloudmart-dashboard
-
-            echo "Repository cloned successfully."
-
-            echo "Current branch:"
-            git branch --show-current
-
-            echo "Latest commit:"
-            git log -1 --oneline
-
-
-            # ==================================================
-            # VERIFY DASHBOARD FILES
-            # ==================================================
-
-            echo "[5/8] Checking dashboard files..."
-
-            if [ ! -f /opt/cloudmart-dashboard/src/dashboard/app.py ]; then
-                echo "ERROR: app.py not found."
-                find /opt/cloudmart-dashboard -maxdepth 4 -type f | head -100
-                exit 1
-            fi
-
-            echo "app.py found."
-
-
-            if [ ! -f /opt/cloudmart-dashboard/src/dashboard/requirements.txt ]; then
-                echo "ERROR: requirements.txt not found."
-                exit 1
-            fi
-
-            echo "requirements.txt found."
-
-
-            # ==================================================
-            # PYTHON VIRTUAL ENVIRONMENT
-            # ==================================================
-
-            echo "[6/8] Creating Python environment..."
-
-            python3 -m venv /opt/cloudmart-dashboard/venv
-
-            /opt/cloudmart-dashboard/venv/bin/pip install --upgrade pip
-
-            /opt/cloudmart-dashboard/venv/bin/pip install \
-              -r /opt/cloudmart-dashboard/src/dashboard/requirements.txt
-
-
-            echo "Python dependencies installed."
-
-
-            # ==================================================
-            # FLASK SYSTEMD SERVICE
-            # ==================================================
-
-            echo "[7/8] Configuring Flask dashboard..."
+            echo "[7/9] Creating Flask systemd service..."
 
             cat > /etc/systemd/system/cloudmart-dashboard.service <<SERVICEEOF
 
@@ -252,13 +226,11 @@ Resources:
 
             User=root
 
-            WorkingDirectory=/opt/cloudmart-dashboard/src/dashboard
+            WorkingDirectory=/opt/cloudmart-dashboard/dashboard
 
             EnvironmentFile=/etc/cloudmart-dashboard.env
 
-            Environment=PYTHONUNBUFFERED=1
-
-            ExecStart=/opt/cloudmart-dashboard/venv/bin/python /opt/cloudmart-dashboard/src/dashboard/app.py
+            ExecStart=/opt/cloudmart-dashboard/venv/bin/python app.py
 
             Restart=always
             RestartSec=5
@@ -273,10 +245,10 @@ Resources:
 
 
             # ==================================================
-            # NGINX CONFIGURATION
+            # 8. NGINX CONFIGURATION
             # ==================================================
 
-            echo "Configuring Nginx..."
+            echo "[8/9] Configuring Nginx..."
 
             rm -f /etc/nginx/sites-enabled/default
 
@@ -286,15 +258,11 @@ Resources:
 
                 listen 80 default_server;
 
-                listen [::]:80 default_server;
-
                 server_name _;
-
 
                 access_log /var/log/nginx/cloudmart-dashboard-access.log;
 
                 error_log /var/log/nginx/cloudmart-dashboard-error.log;
-
 
                 location / {
 
@@ -320,35 +288,24 @@ Resources:
 
             NGINXEOF
 
-
             ln -sf \
               /etc/nginx/sites-available/cloudmart-dashboard \
               /etc/nginx/sites-enabled/cloudmart-dashboard
-
-
-            # ==================================================
-            # VALIDATE NGINX
-            # ==================================================
 
             nginx -t
 
 
             # ==================================================
-            # START FLASK
+            # 9. START SERVICES
             # ==================================================
 
-            echo "[8/8] Starting CloudMart Dashboard..."
+            echo "[9/9] Starting dashboard..."
 
             systemctl daemon-reload
 
             systemctl enable cloudmart-dashboard
 
             systemctl restart cloudmart-dashboard
-
-
-            # ==================================================
-            # START NGINX
-            # ==================================================
 
             systemctl enable nginx
 
@@ -359,21 +316,21 @@ Resources:
             # WAIT FOR FLASK
             # ==================================================
 
-            echo "Waiting for Flask application..."
+            echo "Waiting for Flask..."
 
             for i in $(seq 1 30); do
 
-                if curl -s http://127.0.0.1:5000/ > /dev/null; then
+              if curl -f -s http://127.0.0.1:5000/ > /dev/null; then
 
-                    echo "Flask application is responding."
+                echo "Flask is running."
 
-                    break
+                break
 
-                fi
+              fi
 
-                echo "Waiting for Flask... attempt ${i}/30"
+              echo "Waiting for Flask... attempt ${i}/30"
 
-                sleep 2
+              sleep 2
 
             done
 
@@ -383,24 +340,24 @@ Resources:
             # ==================================================
 
             echo "=================================================="
-            echo "CloudMart Dashboard Service Status"
+            echo "Dashboard service status"
             echo "=================================================="
 
             systemctl --no-pager status cloudmart-dashboard || true
 
             echo "=================================================="
-            echo "Nginx Status"
+            echo "Nginx service status"
             echo "=================================================="
 
             systemctl --no-pager status nginx || true
 
 
             # ==================================================
-            # LOCAL TESTS
+            # LOCAL HEALTH TEST
             # ==================================================
 
             echo "=================================================="
-            echo "Testing Flask directly"
+            echo "Testing Flask"
             echo "=================================================="
 
             curl -I http://127.0.0.1:5000/ || true
@@ -418,62 +375,22 @@ Resources:
             echo "=================================================="
 
 
-  # ==========================================================
-  # ELASTIC IP
-  # ==========================================================
-
-  DashboardElasticIP:
-    Type: AWS::EC2::EIP
-
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-    Properties:
-      Domain: vpc
-
-      Tags:
-        - Key: Name
-          Value: !Sub CloudMart-Dashboard-EIP-${Environment}
-
-
-  # ==========================================================
-  # ELASTIC IP ASSOCIATION
-  # ==========================================================
-
-  DashboardElasticIPAssociation:
-    Type: AWS::EC2::EIPAssociation
-
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-    Properties:
-      InstanceId: !Ref DashboardEC2Instance
-      AllocationId: !GetAtt DashboardElasticIP.AllocationId
-
-
-# ==========================================================
-# OUTPUTS
-# ==========================================================
-
 Outputs:
 
   DashboardInstanceId:
     Description: Dashboard EC2 Instance ID
-    Value: !Ref DashboardEC2Instance
+    Value: !Ref Ec2DashboardV
 
   DashboardPublicIP:
-    Description: Dashboard Elastic IP
-    Value: !Ref DashboardElasticIP
+    Description: Dashboard EC2 Public IP
+    Value: !GetAtt Ec2DashboardV.PublicIp
+
+  DashboardPublicDNS:
+    Description: Dashboard EC2 Public DNS
+    Value: !GetAtt Ec2DashboardV.PublicDnsName
 
   DashboardURL:
     Description: CloudMart Dashboard URL
     Value: !Sub
-      - http://${IP}
-      - IP: !Ref DashboardElasticIP
-
-  DashboardInstanceProfile:
-    Description: Existing Dashboard EC2 Instance Profile used by this stack
-    Value:
-      Fn::ImportValue: !Sub
-        - CloudMart-DashboardEC2InstanceProfileArn-${Env}
-        - Env: !Ref Environment
+      - http://${PublicIP}
+      - PublicIP: !GetAtt Ec2DashboardV.PublicIp
