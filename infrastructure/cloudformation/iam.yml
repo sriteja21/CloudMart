@@ -1143,6 +1143,23 @@ Outputs:
 
 
   # --------------------------------------------------------
+  # DASHBOARD EC2 INSTANCE PROFILE NAME
+  # --------------------------------------------------------
+
+  DashboardEC2InstanceProfileName:
+
+    Description:
+      Dashboard EC2 instance profile name
+
+    Value:
+      !Ref DashboardEC2InstanceProfile
+
+    Export:
+      Name:
+        !Sub CloudMart-DashboardEC2InstanceProfileName-${Environment}
+
+
+  # --------------------------------------------------------
   # CLOUDFORMATION EXECUTION ROLE ARN
   # --------------------------------------------------------
 
