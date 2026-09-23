@@ -423,7 +423,7 @@ Resources:
 
                 location / {
 
-                    proxy_pass http://127.0.0.1:5000;
+                    proxy_pass http://127.0.0.1:8000;
 
                     proxy_http_version 1.1;
 
@@ -529,7 +529,7 @@ Resources:
             for i in $(seq 1 30)
             do
 
-              if curl -f -s http://127.0.0.1:5000/ > /dev/null
+              if curl -f -s http://127.0.0.1:8000/ > /dev/null
               then
 
                 echo "Flask application is running."
@@ -646,7 +646,7 @@ Resources:
             echo "Flask Test"
             echo "=========================================="
 
-            curl -I http://127.0.0.1:5000/ || true
+            curl -I http://127.0.0.1:8000/ || true
 
 
             echo "=========================================="
