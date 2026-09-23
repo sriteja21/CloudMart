@@ -1,0 +1,161 @@
+name: Deploy CloudMart Dashboard
+
+on:
+  push:
+    branches:
+      - dashboard
+
+  workflow_dispatch:
+
+# ==========================================================
+# ENVIRONMENT VARIABLES
+# ==========================================================
+
+env:
+  AWS_REGION: ap-south-1
+  ENVIRONMENT: dev
+
+  DASHBOARD_STACK_NAME: CloudMart-Dashboard-dev
+  DASHBOARD_TEMPLATE: infrastructure/cloudformation/dashboard-stack.yml
+
+  REPORT_BUCKET_NAME: cloudmart-dev-reports-test
+
+  # Change this to your actual EC2 Key Pair name
+  KEY_NAME: cloudmart-key
+
+  # Leave empty if your dashboard does not require API URL
+  DASHBOARD_API_URL: ""
+
+# ==========================================================
+# PERMISSIONS
+# ==========================================================
+
+permissions:
+  id-token: write
+  contents: read
+
+# ==========================================================
+# JOB
+# ==========================================================
+
+jobs:
+
+  deploy-dashboard:
+
+    name: Deploy Dashboard Stack
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ======================================================
+      # CONFIGURE AWS
+      # ======================================================
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ======================================================
+      # VALIDATE TEMPLATE
+      # ======================================================
+
+      - name: Validate Dashboard CloudFormation Template
+        run: |
+          set -e
+
+          echo "Validating dashboard stack..."
+
+          aws cloudformation validate-template \
+            --template-body file://${DASHBOARD_TEMPLATE}
+
+          echo "Dashboard template validation successful."
+
+      # ======================================================
+      # DEPLOY DASHBOARD STACK
+      # ======================================================
+
+      - name: Deploy Dashboard Stack
+        run: |
+          set -e
+
+          echo "=============================================="
+          echo "Deploying CloudMart Dashboard Stack..."
+          echo "=============================================="
+
+          aws cloudformation deploy \
+            --template-file "${DASHBOARD_TEMPLATE}" \
+            --stack-name "${DASHBOARD_STACK_NAME}" \
+            --parameter-overrides \
+              Environment="${ENVIRONMENT}" \
+              InstanceType="t3.micro" \
+              AmiId="ami-0e35ddab05955cf57" \
+              KeyName="${KEY_NAME}" \
+              ReportS3BucketName="${REPORT_BUCKET_NAME}" \
+              DashboardApiUrl="${DASHBOARD_API_URL}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region "${AWS_REGION}"
+
+          echo "=============================================="
+          echo "Dashboard stack deployed successfully."
+          echo "=============================================="
+
+      # ======================================================
+      # WAIT FOR STACK
+      # ======================================================
+
+      - name: Wait for Dashboard Stack
+        run: |
+          set -e
+
+          echo "Waiting for CloudFormation stack..."
+
+          aws cloudformation wait stack-create-complete \
+            --stack-name "${DASHBOARD_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            || aws cloudformation wait stack-update-complete \
+            --stack-name "${DASHBOARD_STACK_NAME}" \
+            --region "${AWS_REGION}"
+
+          echo "Dashboard stack is ready."
+
+      # ======================================================
+      # SHOW STACK STATUS
+      # ======================================================
+
+      - name: Show Dashboard Stack Status
+        run: |
+          echo "=============================================="
+          echo "Dashboard Stack Status"
+          echo "=============================================="
+
+          aws cloudformation describe-stacks \
+            --stack-name "${DASHBOARD_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'Stacks[0].{StackName:StackName,Status:StackStatus}' \
+            --output table
+
+      # ======================================================
+      # SHOW DASHBOARD OUTPUTS
+      # ======================================================
+
+      - name: Show Dashboard Outputs
+        run: |
+          echo "=============================================="
+          echo "Dashboard Outputs"
+          echo "=============================================="
+
+          aws cloudformation describe-stacks \
+            --stack-name "${DASHBOARD_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'Stacks[0].Outputs' \
+            --output table
