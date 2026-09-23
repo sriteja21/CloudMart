@@ -84,7 +84,7 @@ Resources:
       SecurityGroupIds:
 
         - Fn::ImportValue:
-            Fn::Sub: CloudMart-EC2-SG
+            Fn::Sub: CloudMart-EC2-SG-ID
 
 
       # ----------------------------------------------------
