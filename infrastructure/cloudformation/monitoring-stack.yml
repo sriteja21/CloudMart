@@ -1,230 +1,996 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Monitoring, CloudWatch Dashboard, Metrics and Alarms Stack
+Description: >
+  CloudMart Monitoring Stack.
+  Creates CloudWatch dashboard, application metrics,
+  CloudWatch alarms and monitoring SNS notifications.
+
+
+# ==========================================================
+# PARAMETERS
+# ==========================================================
 
 Parameters:
 
   Environment:
     Type: String
     Default: dev
+
     AllowedValues:
       - dev
       - prod
 
+    Description: CloudMart deployment environment
+
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
+
 Resources:
 
+
   # ==========================================================
-  # CLOUDWATCH DASHBOARD
+  # MONITORING SNS TOPIC
+  #
+  # This topic is owned by this monitoring stack.
+  # No ImportValue is required.
+  # ==========================================================
+
+  MonitoringAlarmTopic:
+
+    Type: AWS::SNS::Topic
+
+    Properties:
+
+      TopicName:
+        !Sub CloudMart-${Environment}-Monitoring-Alarms
+
+      DisplayName:
+        !Sub CloudMart ${Environment} Monitoring Alarms
+
+      Tags:
+
+        - Key: Project
+          Value: CloudMart
+
+        - Key: Environment
+          Value:
+            !Ref Environment
+
+        - Key: Component
+          Value: Monitoring
+
+
+  # ==========================================================
+  # CLOUDWATCH OPERATIONS DASHBOARD
   # ==========================================================
 
   CloudMartOperationsDashboard:
+
     Type: AWS::CloudWatch::Dashboard
+
     Properties:
-      DashboardName: !Sub cloudmart-operations-${Environment}
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "title": "Orders Placed",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  [ "CloudMart/Operations", "OrdersPlaced", "Environment", "${Environment}" ]
-                ]
+
+      DashboardName:
+        !Sub cloudmart-operations-${Environment}
+
+      DashboardBody:
+        !Sub |
+
+          {
+            "widgets": [
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 0,
+                "width": 24,
+                "height": 2,
+                "properties": {
+                  "markdown": "# CloudMart Operations Dashboard\n**Environment:** ${Environment}"
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 2,
+                "width": 24,
+                "height": 2,
+                "properties": {
+                  "markdown": "## API Gateway Health"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 4,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "API Gateway Request Count",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "AWS/ApiGateway",
+                      "Count",
+                      "ApiName",
+                      "CloudMart-Product-Customer-Order-API-${Environment}",
+                      "Stage",
+                      "${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 8,
+                "y": 4,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "API Gateway 4XX Errors",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "AWS/ApiGateway",
+                      "4XXError",
+                      "ApiName",
+                      "CloudMart-Product-Customer-Order-API-${Environment}",
+                      "Stage",
+                      "${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 16,
+                "y": 4,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "API Gateway 5XX Errors",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "AWS/ApiGateway",
+                      "5XXError",
+                      "ApiName",
+                      "CloudMart-Product-Customer-Order-API-${Environment}",
+                      "Stage",
+                      "${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 10,
+                "width": 24,
+                "height": 2,
+                "properties": {
+                  "markdown": "## Lambda Health"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 12,
+                "width": 6,
+                "height": 7,
+                "properties": {
+                  "title": "Product Lambda",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Invocations",
+                      "FunctionName",
+                      "CloudMart-Product-API-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "CloudMart-Product-API-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Duration",
+                      "FunctionName",
+                      "CloudMart-Product-API-${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 6,
+                "y": 12,
+                "width": 6,
+                "height": 7,
+                "properties": {
+                  "title": "Order Lambda",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Invocations",
+                      "FunctionName",
+                      "CloudMart-Order-API-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "CloudMart-Order-API-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Duration",
+                      "FunctionName",
+                      "CloudMart-Order-API-${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 12,
+                "y": 12,
+                "width": 6,
+                "height": 7,
+                "properties": {
+                  "title": "Authorizer Lambda",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Invocations",
+                      "FunctionName",
+                      "CloudMart-Lambda-Authorizer-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "CloudMart-Lambda-Authorizer-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Duration",
+                      "FunctionName",
+                      "CloudMart-Lambda-Authorizer-${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 18,
+                "y": 12,
+                "width": 6,
+                "height": 7,
+                "properties": {
+                  "title": "Report Lambda",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Invocations",
+                      "FunctionName",
+                      "CloudMart-Report-Lambda-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "CloudMart-Report-Lambda-${Environment}"
+                    ],
+                    [
+                      "AWS/Lambda",
+                      "Duration",
+                      "FunctionName",
+                      "CloudMart-Report-Lambda-${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 19,
+                "width": 24,
+                "height": 2,
+                "properties": {
+                  "markdown": "## EC2 Health"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 21,
+                "width": 24,
+                "height": 7,
+                "properties": {
+                  "title": "EC2 CPU Utilization",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Average",
+                  "metrics": [
+                    [
+                      {
+                        "expression": "SEARCH('{AWS/EC2,InstanceId} MetricName=\"CPUUtilization\"', 'Average', 300)",
+                        "label": "EC2 CPU Utilization",
+                        "id": "ec2cpu"
+                      }
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 28,
+                "width": 24,
+                "height": 2,
+                "properties": {
+                  "markdown": "## CloudMart Business Metrics"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 30,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "Orders Placed",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "CloudMart/Operations",
+                      "OrdersPlaced",
+                      "Environment",
+                      "${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 8,
+                "y": 30,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "Orders Failed",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "CloudMart/Operations",
+                      "OrdersFailed",
+                      "Environment",
+                      "${Environment}"
+                    ]
+                  ]
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 16,
+                "y": 30,
+                "width": 8,
+                "height": 6,
+                "properties": {
+                  "title": "Low Stock Events",
+                  "view": "timeSeries",
+                  "region": "${AWS::Region}",
+                  "period": 300,
+                  "stat": "Sum",
+                  "metrics": [
+                    [
+                      "CloudMart/Operations",
+                      "LowStockEvents",
+                      "Environment",
+                      "${Environment}"
+                    ]
+                  ]
+                }
               }
-            },
-            {
-              "type": "metric",
-              "x": 12,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "title": "Orders Failed",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  [ "CloudMart/Operations", "OrdersFailed", "Environment", "${Environment}" ]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 6,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "title": "Inventory Updated",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  [ "CloudMart/Operations", "InventoryUpdated", "Environment", "${Environment}" ]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 12,
-              "y": 6,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "title": "Low Stock Events",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  [ "CloudMart/Operations", "LowStockEvents", "Environment", "${Environment}" ]
-                ]
-              }
-            }
-          ]
-        }
+
+            ]
+          }
+
 
   # ==========================================================
   # ORDERS FAILED ALARM
   # ==========================================================
 
   OrdersFailedAlarm:
+
     Type: AWS::CloudWatch::Alarm
+
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrdersFailed
-      AlarmDescription: Alarm when one or more orders fail.
-      Namespace: CloudMart/Operations
-      MetricName: OrdersFailed
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-OrdersFailed
+
+      AlarmDescription:
+        Alarm when one or more orders fail.
+
+      Namespace:
+        CloudMart/Operations
+
+      MetricName:
+        OrdersFailed
+
       Dimensions:
+
         - Name: Environment
-          Value: !Ref Environment
-      Statistic: Sum
+          Value:
+            !Ref Environment
+
+      Statistic:
+        Sum
+
       Period: 300
+
       EvaluationPeriods: 1
+
       DatapointsToAlarm: 1
+
       Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
       AlarmActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
-      OKActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # LOW STOCK EVENTS ALARM
+  # ==========================================================
+
+  LowStockEventsAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-LowStockEvents
+
+      AlarmDescription:
+        Alarm when one or more low stock events occur.
+
+      Namespace:
+        CloudMart/Operations
+
+      MetricName:
+        LowStockEvents
+
+      Dimensions:
+
+        - Name: Environment
+          Value:
+            !Ref Environment
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # API GATEWAY 4XX ALARM
+  # ==========================================================
+
+  Api4xxAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-API-4XX
+
+      AlarmDescription:
+        Alarm when API Gateway returns one or more 4XX responses.
+
+      Namespace:
+        AWS/ApiGateway
+
+      MetricName:
+        4XXError
+
+      Dimensions:
+
+        - Name: ApiName
+          Value:
+            !Sub CloudMart-Product-Customer-Order-API-${Environment}
+
+        - Name: Stage
+          Value:
+            !Ref Environment
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # API GATEWAY 5XX ALARM
+  # ==========================================================
+
+  Api5xxAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-API-5XX
+
+      AlarmDescription:
+        Alarm when API Gateway returns one or more 5XX responses.
+
+      Namespace:
+        AWS/ApiGateway
+
+      MetricName:
+        5XXError
+
+      Dimensions:
+
+        - Name: ApiName
+          Value:
+            !Sub CloudMart-Product-Customer-Order-API-${Environment}
+
+        - Name: Stage
+          Value:
+            !Ref Environment
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # PRODUCT LAMBDA ERROR ALARM
+  # ==========================================================
+
+  ProductLambdaErrorsAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-ProductLambda-Errors
+
+      AlarmDescription:
+        Alarm when Product Lambda has one or more errors.
+
+      Namespace:
+        AWS/Lambda
+
+      MetricName:
+        Errors
+
+      Dimensions:
+
+        - Name: FunctionName
+          Value:
+            !Sub CloudMart-Product-API-${Environment}
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # ORDER LAMBDA ERROR ALARM
+  # ==========================================================
+
+  OrderLambdaErrorsAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-OrderLambda-Errors
+
+      AlarmDescription:
+        Alarm when Order Lambda has one or more errors.
+
+      Namespace:
+        AWS/Lambda
+
+      MetricName:
+        Errors
+
+      Dimensions:
+
+        - Name: FunctionName
+          Value:
+            !Sub CloudMart-Order-API-${Environment}
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # AUTHORIZER LAMBDA ERROR ALARM
+  # ==========================================================
+
+  AuthorizerLambdaErrorsAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-AuthorizerLambda-Errors
+
+      AlarmDescription:
+        Alarm when Lambda Authorizer has one or more errors.
+
+      Namespace:
+        AWS/Lambda
+
+      MetricName:
+        Errors
+
+      Dimensions:
+
+        - Name: FunctionName
+          Value:
+            !Sub CloudMart-Lambda-Authorizer-${Environment}
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # REPORT LAMBDA ERROR ALARM
+  # ==========================================================
+
+  ReportLambdaErrorsAlarm:
+
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub CloudMart-${Environment}-ReportLambda-Errors
+
+      AlarmDescription:
+        Alarm when Report Lambda has one or more errors.
+
+      Namespace:
+        AWS/Lambda
+
+      MetricName:
+        Errors
+
+      Dimensions:
+
+        - Name: FunctionName
+          Value:
+            !Sub CloudMart-Report-Lambda-${Environment}
+
+      Statistic:
+        Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator:
+        GreaterThanOrEqualToThreshold
+
+      TreatMissingData:
+        notBreaching
+
+      AlarmActions:
+        - !Ref MonitoringAlarmTopic
+
+
+# ==========================================================
+# OUTPUTS
+# ==========================================================
+
+Outputs:
+
+
+  # ==========================================================
+  # DASHBOARD
+  # ==========================================================
+
+  OperationsDashboardName:
+
+    Description:
+      CloudMart CloudWatch operations dashboard
+
+    Value:
+      !Sub cloudmart-operations-${Environment}
+
+
+  # ==========================================================
+  # MONITORING SNS TOPIC
+  # ==========================================================
+
+  MonitoringAlarmTopicArn:
+
+    Description:
+      SNS topic used for CloudMart monitoring alarms
+
+    Value:
+      !Ref MonitoringAlarmTopic
+
+
+  # ==========================================================
+  # ORDERS FAILED ALARM
+  # ==========================================================
+
+  OrdersFailedAlarmName:
+
+    Description:
+      Orders failed alarm
+
+    Value:
+      !Ref OrdersFailedAlarm
+
 
   # ==========================================================
   # LOW STOCK ALARM
   # ==========================================================
 
-  LowStockAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub CloudMart-${Environment}-LowStock
-      AlarmDescription: Alarm when one or more products enter low-stock state.
-      Namespace: CloudMart/Operations
-      MetricName: LowStockEvents
-      Dimensions:
-        - Name: Environment
-          Value: !Ref Environment
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      DatapointsToAlarm: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-LowStockTopicArn
-      OKActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-LowStockTopicArn
+  LowStockEventsAlarmName:
+
+    Description:
+      Low stock events alarm
+
+    Value:
+      !Ref LowStockEventsAlarm
+
 
   # ==========================================================
-  # ORDERS PLACED ACTIVITY ALARM
+  # API 4XX ALARM
   # ==========================================================
 
-  OrdersPlacedAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrdersPlaced
-      AlarmDescription: Alarm when order activity is detected.
-      Namespace: CloudMart/Operations
-      MetricName: OrdersPlaced
-      Dimensions:
-        - Name: Environment
-          Value: !Ref Environment
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      DatapointsToAlarm: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
-      OKActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+  Api4xxAlarmName:
+
+    Description:
+      API Gateway 4XX alarm
+
+    Value:
+      !Ref Api4xxAlarm
+
 
   # ==========================================================
-  # INVENTORY UPDATED ACTIVITY ALARM
+  # API 5XX ALARM
   # ==========================================================
 
-  InventoryUpdatedAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub CloudMart-${Environment}-InventoryUpdated
-      AlarmDescription: Alarm when inventory update activity is detected.
-      Namespace: CloudMart/Operations
-      MetricName: InventoryUpdated
-      Dimensions:
-        - Name: Environment
-          Value: !Ref Environment
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      DatapointsToAlarm: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
-      OKActions:
-        - Fn::ImportValue:
-            !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+  Api5xxAlarmName:
 
-Outputs:
+    Description:
+      API Gateway 5XX alarm
 
-  OperationsDashboardName:
-    Description: CloudWatch operations dashboard name
-    Value: !Sub cloudmart-operations-${Environment}
+    Value:
+      !Ref Api5xxAlarm
 
-  OrdersFailedAlarmName:
-    Description: Orders failed CloudWatch alarm
-    Value: !Ref OrdersFailedAlarm
 
-  LowStockAlarmName:
-    Description: Low stock CloudWatch alarm
-    Value: !Ref LowStockAlarm
+  # ==========================================================
+  # PRODUCT LAMBDA ALARM
+  # ==========================================================
 
-  OrdersPlacedAlarmName:
-    Description: Orders placed CloudWatch alarm
-    Value: !Ref OrdersPlacedAlarm
+  ProductLambdaErrorsAlarmName:
 
-  InventoryUpdatedAlarmName:
-    Description: Inventory updated CloudWatch alarm
-    Value: !Ref InventoryUpdatedAlarm
+    Description:
+      Product Lambda errors alarm
+
+    Value:
+      !Ref ProductLambdaErrorsAlarm
+
+
+  # ==========================================================
+  # ORDER LAMBDA ALARM
+  # ==========================================================
+
+  OrderLambdaErrorsAlarmName:
+
+    Description:
+      Order Lambda errors alarm
+
+    Value:
+      !Ref OrderLambdaErrorsAlarm
+
+
+  # ==========================================================
+  # AUTHORIZER LAMBDA ALARM
+  # ==========================================================
+
+  AuthorizerLambdaErrorsAlarmName:
+
+    Description:
+      Authorizer Lambda errors alarm
+
+    Value:
+      !Ref AuthorizerLambdaErrorsAlarm
+
+
+  # ==========================================================
+  # REPORT LAMBDA ALARM
+  # ==========================================================
+
+  ReportLambdaErrorsAlarmName:
+
+    Description:
+      Report Lambda errors alarm
+
+    Value:
+      !Ref ReportLambdaErrorsAlarm

@@ -1302,12 +1302,6 @@ def create_order(event):
 
         publish_metric("OrdersPlaced")
 
-        if inventory_updates:
-            publish_metric(
-                "InventoryUpdated",
-                inventory_updates
-            )
-
         if low_stock_events:
             publish_metric(
                 "LowStockEvents",
@@ -1931,12 +1925,6 @@ def cancel_order(event):
             )
 
         conn.commit()
-
-        if inventory_restorations:
-            publish_metric(
-                "InventoryUpdated",
-                inventory_restorations
-            )
 
         try:
             publish_event(

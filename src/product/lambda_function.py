@@ -804,7 +804,8 @@ def publish_low_stock_metric(product_id, quantity, threshold):
             "Failed to publish LowStockEvents metric: product_id=%s",
             product_id
         )
-        raise
+        # Metric publishing must not fail the product operation.
+        return None
 
 def publish_inventory_event(product_id, quantity, threshold):
     logger.info(
