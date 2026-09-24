@@ -11,6 +11,7 @@ logger.setLevel(logging.INFO)
 
 ssm = boto3.client("ssm")
 events = boto3.client("events")
+cloudwatch = boto3.client("cloudwatch")
 
 ENV = os.getenv("ENVIRONMENT", "dev")
 EVENT_BUS = f"cloudmart-{ENV}-event-bus"
@@ -24,6 +25,7 @@ PARAMS = {
     "password": f"/app/{ENV}/database/password",
 }
 
+_connection = None
 
 
 def parameter(name):
@@ -139,11 +141,28 @@ def initialize_database(c):
 
 
 def db():
+    global _connection
+
+    logger.info("Database connection requested")
+
+    if _connection:
+        try:
+            _connection.ping(reconnect=True)
+            logger.info("Existing database connection is healthy")
+            return _connection
+        except Exception:
+            logger.exception("Existing database connection is unhealthy")
+            try:
+                _connection.close()
+            except Exception:
+                pass
+            _connection = None
+
     logger.info("Creating new database connection")
     c = config()
-    connection = initialize_database(c)
+    _connection = initialize_database(c)
     logger.info("New database connection ready")
-    return connection
+    return _connection
 
 
 def response(status, body):
@@ -290,13 +309,14 @@ def create_product(event):
         conn.commit()
         logger.info("Product creation transaction committed successfully")
 
-        if quantity < threshold:
+        if quantity <= threshold:
             logger.info(
-                "Product created below reorder threshold; publishing low stock event: product_id=%s quantity=%s threshold=%s",
+                "Product created at or below reorder threshold: product_id=%s quantity=%s threshold=%s",
                 pid,
                 quantity,
                 threshold
             )
+            publish_low_stock_metric(pid, quantity, threshold)
             publish_inventory_event(pid, quantity, threshold)
 
         logger.info("Product creation completed successfully: product_id=%s", pid)
@@ -619,9 +639,9 @@ def update_product(event):
 
         logger.info("Database transaction changes prepared: product_id=%s", pid)
 
-        if inventory_requested and quantity < threshold:
+        if inventory_requested and quantity <= threshold:
             logger.info(
-                "Product is below reorder threshold: product_id=%s quantity=%s threshold=%s",
+                "Product is at or below reorder threshold: product_id=%s quantity=%s threshold=%s",
                 pid,
                 quantity,
                 threshold
@@ -631,7 +651,8 @@ def update_product(event):
         conn.commit()
         logger.info("Product update transaction committed successfully: product_id=%s", pid)
 
-        if inventory_requested and quantity < threshold:
+        if inventory_requested and quantity <= threshold:
+            publish_low_stock_metric(pid, quantity, threshold)
             publish_inventory_event(pid, quantity, threshold)
 
         logger.info("Product update completed successfully: product_id=%s", pid)
@@ -741,6 +762,50 @@ def delete_product(event):
         )
         raise
 
+
+
+def publish_low_stock_metric(product_id, quantity, threshold):
+    """Publish one LowStockEvents metric after a successful inventory update."""
+    logger.info(
+        "Publishing LowStockEvents metric: product_id=%s quantity=%s threshold=%s",
+        product_id,
+        quantity,
+        threshold
+    )
+
+    try:
+        result = cloudwatch.put_metric_data(
+            Namespace="CloudMart/Operations",
+            MetricData=[
+                {
+                    "MetricName": "LowStockEvents",
+                    "Dimensions": [
+                        {
+                            "Name": "Environment",
+                            "Value": ENV
+                        }
+                    ],
+                    "Value": 1,
+                    "Unit": "Count"
+                }
+            ]
+        )
+
+        logger.info(
+            "LowStockEvents metric published successfully: product_id=%s quantity=%s threshold=%s",
+            product_id,
+            quantity,
+            threshold
+        )
+        return result
+
+    except Exception:
+        logger.exception(
+            "Failed to publish LowStockEvents metric: product_id=%s",
+            product_id
+        )
+        # Metric publishing must not fail the product operation.
+        return None
 
 def publish_inventory_event(product_id, quantity, threshold):
     logger.info(
@@ -931,5 +996,3 @@ def lambda_handler(event, context):
             "========== PRODUCT LAMBDA REQUEST END: status=500 =========="
         )
         return result
-
-

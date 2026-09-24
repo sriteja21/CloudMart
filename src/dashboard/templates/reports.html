@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← Dashboard</a>
+<header class="topbar">
+    <div>
+        <h1>S3 Reports</h1>
+        <p class="muted">Download generated CloudMart reports.</p>
+    </div>
+</header>
+
+{% if error %}
+<div class="alert error">{{ error }}</div>
+{% endif %}
+
+<section class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Report</th><th>Last Modified</th><th>Size</th><th></th></tr></thead>
+            <tbody>
+            {% for report in reports %}
+            <tr>
+                <td>{{ report.key }}</td>
+                <td>{{ report.last_modified }}</td>
+                <td>{{ report.size }} bytes</td>
+                <td>
+                    <a class="download"
+                       href="{{ url_for('download_report', key=report.key) }}">
+                       Download
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No reports found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

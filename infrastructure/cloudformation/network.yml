@@ -8,6 +8,20 @@ Description: >
 
 Parameters:
 
+  # ==========================================================
+  # ENVIRONMENT
+  # ==========================================================
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Deployment environment
+
+
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
@@ -437,6 +451,86 @@ Resources:
           Value: dev
 
 
+
+  # ==========================================================
+  # CLOUDWATCH ENDPOINT SECURITY GROUP
+  # ==========================================================
+
+  CloudWatchEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for CloudMart CloudWatch VPC Endpoints
+      VpcId: !Ref CloudMartVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: CloudMart-CloudWatch-Endpoint-SG
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ==========================================================
+  # CLOUDWATCH MONITORING INTERFACE ENDPOINT
+  # ==========================================================
+
+  CloudWatchMonitoringEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CloudMartVPC
+      VpcEndpointType: Interface
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.monitoring
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref CloudWatchEndpointSecurityGroup
+      Tags:
+        - Key: Name
+          Value: CloudMart-CloudWatch-Monitoring-Endpoint
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ==========================================================
+  # CLOUDWATCH LOGS INTERFACE ENDPOINT
+  # ==========================================================
+
+  CloudWatchLogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref CloudMartVPC
+      VpcEndpointType: Interface
+      ServiceName:
+        !Sub com.amazonaws.${AWS::Region}.logs
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref CloudWatchEndpointSecurityGroup
+      Tags:
+        - Key: Name
+          Value: CloudMart-CloudWatch-Logs-Endpoint
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
 Outputs:
 
   VPCId:
@@ -521,3 +615,15 @@ Outputs:
     Value: !Ref EventBridgeEndpoint
     Export:
       Name: CloudMart-EventBridge-Endpoint-ID
+
+  CloudWatchMonitoringEndpointId:
+    Description: CloudMart CloudWatch Monitoring VPC Endpoint ID
+    Value: !Ref CloudWatchMonitoringEndpoint
+    Export:
+      Name: !Sub CloudMart-CloudWatch-Monitoring-Endpoint-ID-${Environment}
+
+  CloudWatchLogsEndpointId:
+    Description: CloudMart CloudWatch Logs VPC Endpoint ID
+    Value: !Ref CloudWatchLogsEndpoint
+    Export:
+      Name: !Sub CloudMart-CloudWatch-Logs-Endpoint-ID-${Environment}
