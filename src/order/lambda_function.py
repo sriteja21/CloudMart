@@ -1019,7 +1019,9 @@ def create_order(event):
                         "total_price":
                             item_total,
                         "available":
-                            available
+                            available,
+                        "reorder_threshold":
+                            int(product["reorder_threshold"])
                     }
                 )
 
