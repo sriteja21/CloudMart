@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - changes
   workflow_dispatch:
 
 # ==========================================================
@@ -108,7 +107,7 @@ jobs:
           echo "Network deployment successful."
 
   # ==========================================================
-  # 3. DATABASE & INIT-SCHEMA
+  # 3. DATABASE & INIT-SCHEMA (SAM Build & Deploy)
   # ==========================================================
   database:
     name: Deploy Database & Init Schema
@@ -124,6 +123,9 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
       - name: Validate DB Password
         run: |
           set -e
@@ -134,19 +136,45 @@ jobs:
           fi
           echo "DB_PASSWORD secret is available."
 
-      - name: Deploy Database
+      - name: Verify Init Schema Source
+        run: |
+          set -e
+          echo "=============================================="
+          echo "Verifying Database Init Schema Files"
+          echo "=============================================="
+          
+          if [ -d "src/init-schema" ]; then
+            echo "Directory src/init-schema exists."
+            ls -la src/init-schema
+          else
+            echo "Warning: src/init-schema directory missing."
+            exit 1
+          fi
+
+      - name: Build Database & Schema SAM Template
+        run: |
+          set -e
+          sam build \
+            --template-file infrastructure/cloudformation/data.yml
+
+          echo "Database template build successful."
+
+      - name: Deploy Database via SAM
         run: |
           set -e
           echo "=============================================="
           echo "Deploying CloudMart Database"
           echo "=============================================="
 
-          aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/data.yml \
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
             --stack-name cloudmart-data \
             --region "$AWS_REGION" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --parameter-overrides \
               DBPassword="${{ secrets.DB_PASSWORD }}" \
+            --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
           echo "Database deployment successful."
@@ -168,21 +196,6 @@ jobs:
               --region "$AWS_REGION"
           fi
           echo "RDS is available."
-
-      - name: Verify Init Schema Source
-        run: |
-          set -e
-          echo "=============================================="
-          echo "Verifying Database Init Schema Files"
-          echo "=============================================="
-          
-          if [ -d "src/init-schema" ]; then
-            echo "Directory src/init-schema exists."
-            ls -la src/init-schema
-          else
-            echo "Warning: src/init-schema directory missing."
-            exit 1
-          fi
 
   # ==========================================================
   # 4. IAM
@@ -446,7 +459,7 @@ jobs:
             --stack-name cloudmart-application \
             --region "$AWS_REGION" \
             --resolve-s3 \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -572,7 +585,7 @@ jobs:
             --template-file .aws-sam/build/template.yaml \
             --region "${AWS_REGION}" \
             --resolve-s3 \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
