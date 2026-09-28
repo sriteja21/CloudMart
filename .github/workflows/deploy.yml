@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - chnages 
   workflow_dispatch:
 
 # ==========================================================
@@ -12,6 +13,7 @@ on:
 env:
   AWS_REGION: ap-south-1
   ENVIRONMENT: dev
+  SAM_CLI_TELEMETRY: 0
   REPORT_BUCKET_NAME: cloudmart-dev-reports-test
   REPORT_STACK_NAME: CloudMart-Reporting-dev
   SAM_REPORT_TEMPLATE: infrastructure/cloudformation/reporting-stack.yml
@@ -122,6 +124,11 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
@@ -278,6 +285,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
 
@@ -419,6 +431,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
 
@@ -526,6 +543,11 @@ jobs:
         run: |
           set -e
           aws sts get-caller-identity
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
