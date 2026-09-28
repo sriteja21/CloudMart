@@ -1,510 +1,237 @@
 AWSTemplateFormatVersion: '2010-09-09'
-
 Transform: AWS::Serverless-2016-10-31
 
-Description: CloudMart Product Customer and Order API
+Description: CloudMart Database Stack 
+
+# ==========================================================
+# PARAMETERS
+# ==========================================================
 
 Parameters:
 
   Environment:
     Type: String
     Default: dev
-    AllowedValues:
-      - dev
-      - prod
+    Description: Environment name (e.g., dev, staging, prod)
 
+  DBName:
+    Type: String
+    Default: cloudmart
+    Description: CloudMart database name
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+
+  DBUsername:
+    Type: String
+    Default: cloudmartadmin
+    Description: RDS MySQL master username
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: RDS MySQL master password
+    MinLength: 8
+    MaxLength: 41
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS MySQL instance class for development
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: RDS allocated storage in GB for development
+    MinValue: 20
+
+
+# ==========================================================
+# RESOURCES
+# ==========================================================
 
 Resources:
 
-  ProductApiFunction:
+  # ========================================================
+  # RDS SUBNET GROUP
+  # ========================================================
 
+  CloudMartDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: CloudMart RDS private subnet group
+      SubnetIds:
+        - Fn::ImportValue: CloudMart-Private-Subnet-ID
+        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+      Tags:
+        - Key: Name
+          Value: CloudMart-RDS-SubnetGroup
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ========================================================
+  # RDS MYSQL
+  # ========================================================
+
+  CloudMartDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.0.46'
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      DBSubnetGroupName: !Ref CloudMartDBSubnetGroup
+      VPCSecurityGroups:
+        - Fn::ImportValue: CloudMart-RDS-SG-ID
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 0
+      CopyTagsToSnapshot: true
+      StorageEncrypted: true
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: CloudMart-RDS
+        - Key: Project
+          Value: CloudMart
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ========================================================
+  # SSM PARAMETERS
+  # ========================================================
+
+  DBHostParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/app/${Environment}/database/host'
+      Type: String
+      Value: !GetAtt CloudMartDatabase.Endpoint.Address
+
+  DBPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/app/${Environment}/database/port'
+      Type: String
+      Value: !GetAtt CloudMartDatabase.Endpoint.Port
+
+  DBNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/app/${Environment}/database/name'
+      Type: String
+      Value: !Ref DBName
+
+  DBUsernameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/app/${Environment}/database/username'
+      Type: String
+      Value: !Ref DBUsername
+
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/app/${Environment}/database/password'
+      Type: String
+      Value: !Ref DBPassword
+
+
+  # ========================================================
+  # LAMBDA SECURITY GROUP
+  # ========================================================
+
+  InitSchemaLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Init Schema Lambda
+      VpcId:
+        Fn::ImportValue: CloudMart-VPC-ID
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: CloudMart-InitSchema-Lambda-SG
+        - Key: Project
+          Value: CloudMart
+
+
+  # ========================================================
+  # INIT SCHEMA SAM FUNCTION
+  # ========================================================
+
+  InitSchemaLambda:
     Type: AWS::Serverless::Function
-
     Properties:
-
-      FunctionName:
-        !Sub CloudMart-Product-API-${Environment}
-
-      Runtime: python3.12
-
+      FunctionName: !Sub CloudMart-InitSchema-${Environment}
+      CodeUri: ../../src/init-schema
       Handler: lambda_function.lambda_handler
-
-      CodeUri: ../../src/product/
-
+      Runtime: python3.11
+      Timeout: 300
       MemorySize: 256
-
-      Timeout: 30
-
-      Role:
-        Fn::ImportValue:
-          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
-
       VpcConfig:
-
         SecurityGroupIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
-
+          - !Ref InitSchemaLambdaSecurityGroup
         SubnetIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
-
+          - Fn::ImportValue: CloudMart-Private-Subnet-ID
+          - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameters
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*"
       Environment:
-
         Variables:
-
-          ENVIRONMENT:
-            !Ref Environment
-
-      Events:
-
-        GetProducts:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /product
-
-            Method: GET
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        Project: CloudMart
 
 
-        CreateProduct:
+  # ========================================================
+  # CUSTOM RESOURCE TO TRIGGER LAMBDA ON DEPLOY
+  # ========================================================
 
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /product
-
-            Method: POST
-
-
-        GetProduct:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /product/{id}
-
-            Method: GET
-
-
-        UpdateProduct:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /product/{id}
-
-            Method: PUT
-
-
-        DeleteProduct:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /product/{id}
-
-            Method: DELETE
-
-
-  CustomerApiFunction:
-
-    Type: AWS::Serverless::Function
-
+  ApplySchemaCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: 
+      - CloudMartDatabase
+      - DBHostParameter
+      - DBPortParameter
+      - DBNameParameter
+      - DBUsernameParameter
+      - DBPasswordParameter
     Properties:
+      ServiceToken: !GetAtt InitSchemaLambda.Arn
 
-      FunctionName:
-        !Sub CloudMart-Customer-API-${Environment}
 
-      Runtime: python3.12
-
-      Handler: lambda_function.lambda_handler
-
-      CodeUri: ../../src/customer/
-
-      MemorySize: 256
-
-      Timeout: 30
-
-      Role:
-        Fn::ImportValue:
-          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
-
-      VpcConfig:
-
-        SecurityGroupIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
-
-        SubnetIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
-
-      Environment:
-
-        Variables:
-
-          ENVIRONMENT:
-            !Ref Environment
-
-      Events:
-
-        CreateCustomer:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /customer
-
-            Method: POST
-
-            Auth:
-              Authorizer: NONE
-
-
-        GetCustomers:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /customer
-
-            Method: GET
-
-
-        GetCustomer:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /customer/{id}
-
-            Method: GET
-
-
-        UpdateCustomer:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /customer/{id}
-
-            Method: PUT
-
-
-        DeleteCustomer:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /customer/{id}
-
-            Method: DELETE
-
-
-  OrderApiFunction:
-
-    Type: AWS::Serverless::Function
-
-    Properties:
-
-      FunctionName:
-        !Sub CloudMart-Order-API-${Environment}
-
-      Runtime: python3.12
-
-      Handler: lambda_function.lambda_handler
-
-      CodeUri: ../../src/order/
-
-      MemorySize: 256
-
-      Timeout: 30
-
-      Role:
-        Fn::ImportValue:
-          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
-
-      VpcConfig:
-
-        SecurityGroupIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
-
-        SubnetIds:
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
-
-          - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
-
-      Environment:
-
-        Variables:
-
-          ENVIRONMENT:
-            !Ref Environment
-
-      Events:
-
-        CreateOrder:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order
-
-            Method: POST
-
-
-        GetOrders:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order
-
-            Method: GET
-
-
-        GetOrder:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order/{id}
-
-            Method: GET
-
-
-        UpdateOrder:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order/{id}
-
-            Method: PUT
-
-
-        GetCustomerOrders:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order/customer/{id}
-
-            Method: GET
-
-
-        CancelOrder:
-
-          Type: Api
-
-          Properties:
-
-            RestApiId:
-              !Ref ProductApi
-
-            Path: /order/{id}
-
-            Method: PATCH
-
-
-  ProductApi:
-
-    Type: AWS::Serverless::Api
-
-    Properties:
-
-      Name:
-        !Sub CloudMart-Product-Customer-Order-API-${Environment}
-
-      StageName:
-        !Ref Environment
-
-      EndpointConfiguration:
-        Type: REGIONAL
-
-      Cors:
-
-        AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
-
-        AllowHeaders: "'Content-Type,Authorization'"
-
-        AllowOrigin: "'*'"
-
-      Auth:
-
-        DefaultAuthorizer: CloudMartAuthorizer
-
-        Authorizers:
-
-          CloudMartAuthorizer:
-
-            FunctionArn:
-              Fn::ImportValue:
-                !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
-
-            FunctionPayloadType: REQUEST
-
-            Identity:
-
-              Headers:
-                - Authorization
-
-            AuthorizerResultTtlInSeconds: 0
-
+# ==========================================================
+# OUTPUTS
+# ==========================================================
 
 Outputs:
 
-  ProductApiUrl:
-
-    Description: CloudMart API URL
-
-    Value:
-
-      !Sub
-        - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-
-        - ApiId:
-            !Ref ProductApi
-
-
-  ProductApiFunctionArn:
-
-    Description: CloudMart Product Lambda ARN
-
-    Value:
-      !GetAtt ProductApiFunction.Arn
-
+  DatabaseEndpoint:
+    Description: CloudMart RDS endpoint
+    Value: !GetAtt CloudMartDatabase.Endpoint.Address
     Export:
-      Name:
-        !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
+      Name: CloudMart-DatabaseEndpoint
 
-
-  ProductApiFunctionName:
-
-    Description: CloudMart Product Lambda name
-
-    Value:
-      !Ref ProductApiFunction
-
+  InitSchemaLambdaArn:
+    Description: ARN of the Schema Initialization Lambda
+    Value: !GetAtt InitSchemaLambda.Arn
     Export:
-      Name:
-        !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
-
-
-  CustomerApiFunctionArn:
-
-    Description: CloudMart Customer Lambda ARN
-
-    Value:
-      !GetAtt CustomerApiFunction.Arn
-
-    Export:
-      Name:
-        !Sub CloudMart-Customer-Api-Lambda-Arn-${Environment}
-
-
-  CustomerApiFunctionName:
-
-    Description: CloudMart Customer Lambda name
-
-    Value:
-      !Ref CustomerApiFunction
-
-    Export:
-      Name:
-        !Sub CloudMart-Customer-Api-Lambda-Name-${Environment}
-
-
-  OrderApiFunctionArn:
-
-    Description: CloudMart Order Lambda ARN
-
-    Value:
-      !GetAtt OrderApiFunction.Arn
-
-    Export:
-      Name:
-        !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
-
-
-  OrderApiFunctionName:
-
-    Description: CloudMart Order Lambda name
-
-    Value:
-      !Ref OrderApiFunction
-
-    Export:
-      Name:
-        !Sub CloudMart-Order-Api-Lambda-Name-${Environment}
+      Name: CloudMart-InitSchemaLambdaArn

@@ -131,20 +131,20 @@ Resources:
             Method: DELETE
 
 
-  OrderApiFunction:
+  CustomerApiFunction:
 
     Type: AWS::Serverless::Function
 
     Properties:
 
       FunctionName:
-        !Sub CloudMart-Order-API-${Environment}
+        !Sub CloudMart-Customer-API-${Environment}
 
       Runtime: python3.12
 
       Handler: lambda_function.lambda_handler
 
-      CodeUri: ../../src/order/
+      CodeUri: ../../src/customer/
 
       MemorySize: 256
 
@@ -248,6 +248,51 @@ Resources:
 
             Method: DELETE
 
+
+  OrderApiFunction:
+
+    Type: AWS::Serverless::Function
+
+    Properties:
+
+      FunctionName:
+        !Sub CloudMart-Order-API-${Environment}
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      CodeUri: ../../src/order/
+
+      MemorySize: 256
+
+      Timeout: 30
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+
+      VpcConfig:
+
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-2-ID
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+      Events:
 
         CreateOrder:
 
@@ -417,9 +462,33 @@ Outputs:
         !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
 
 
+  CustomerApiFunctionArn:
+
+    Description: CloudMart Customer Lambda ARN
+
+    Value:
+      !GetAtt CustomerApiFunction.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-Customer-Api-Lambda-Arn-${Environment}
+
+
+  CustomerApiFunctionName:
+
+    Description: CloudMart Customer Lambda name
+
+    Value:
+      !Ref CustomerApiFunction
+
+    Export:
+      Name:
+        !Sub CloudMart-Customer-Api-Lambda-Name-${Environment}
+
+
   OrderApiFunctionArn:
 
-    Description: CloudMart Order and Customer Lambda ARN
+    Description: CloudMart Order Lambda ARN
 
     Value:
       !GetAtt OrderApiFunction.Arn
@@ -431,7 +500,7 @@ Outputs:
 
   OrderApiFunctionName:
 
-    Description: CloudMart Order and Customer Lambda name
+    Description: CloudMart Order Lambda name
 
     Value:
       !Ref OrderApiFunction
