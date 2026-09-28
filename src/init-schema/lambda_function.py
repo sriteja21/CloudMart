@@ -228,22 +228,22 @@ def execute_schema(config):
 
         with connection.cursor() as cursor:
 
-            statements = sql.split(";")
+            raw_statements = sql.split(";")
 
             logger.info(
-                "Found %s SQL statements in schema.sql",
-                len(statements)
+                "Processing SQL file statements..."
             )
 
-            for statement in statements:
+            for raw_stmt in raw_statements:
 
-                statement = statement.strip()
+                # Strip inline comment lines from multi-line statements
+                cleaned_lines = [
+                    line for line in raw_stmt.splitlines()
+                    if line.strip() and not line.strip().startswith("--")
+                ]
+                statement = "\n".join(cleaned_lines).strip()
 
                 if not statement:
-                    continue
-
-                # Ignore comment-only statements
-                if statement.startswith("--"):
                     continue
 
                 logger.info(

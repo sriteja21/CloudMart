@@ -1,217 +1,510 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: CloudMart Database Stack 
-# ==========================================================
-# PARAMETERS
-# ==========================================================
+Transform: AWS::Serverless-2016-10-31
+
+Description: CloudMart Product Customer and Order API[cite: 6]
 
 Parameters:
 
-  DBName:
+  Environment:
     Type: String
-    Default: cloudmart
-    Description: CloudMart database name
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
 
-  DBUsername:
-    Type: String
-    Default: cloudmartadmin
-    Description: RDS MySQL master username
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: RDS MySQL master password
-    MinLength: 8
-    MaxLength: 41
-
-  DBInstanceClass:
-    Type: String
-    Default: db.t3.micro
-    Description: RDS MySQL instance class for development
-
-  DBAllocatedStorage:
-    Type: Number
-    Default: 20
-    Description: RDS allocated storage in GB for development
-    MinValue: 20
-
-
-# ==========================================================
-# RESOURCES
-# ==========================================================
 
 Resources:
 
-  # ========================================================
-  # RDS SUBNET GROUP
-  # ========================================================
+  ProductApiFunction:
 
-  CloudMartDBSubnetGroup:
-
-    Type: AWS::RDS::DBSubnetGroup
+    Type: AWS::Serverless::Function
 
     Properties:
 
-      DBSubnetGroupDescription: CloudMart RDS private subnet group
+      FunctionName:
+        !Sub CloudMart-Product-API-${Environment}
 
-      SubnetIds:
-        - Fn::ImportValue: CloudMart-Private-Subnet-ID
-        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+      Runtime: python3.12
 
-      Tags:
+      Handler: lambda_function.lambda_handler
 
-        - Key: Name
-          Value: CloudMart-RDS-SubnetGroup
+      CodeUri: ../../src/product/
 
-        - Key: Project
-          Value: CloudMart
+      MemorySize: 256
 
-        - Key: Environment
-          Value: dev
+      Timeout: 30
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+
+      VpcConfig:
+
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-2-ID
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+      Events:
+
+        GetProducts:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /product
+
+            Method: GET
 
 
-  # ========================================================
-  # RDS MYSQL
-  # ========================================================
+        CreateProduct:
 
-  CloudMartDatabase:
+          Type: Api
 
-    Type: AWS::RDS::DBInstance
+          Properties:
 
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /product
+
+            Method: POST
+
+
+        GetProduct:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /product/{id}
+
+            Method: GET
+
+
+        UpdateProduct:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /product/{id}
+
+            Method: PUT
+
+
+        DeleteProduct:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /product/{id}
+
+            Method: DELETE
+
+
+  CustomerApiFunction:
+
+    Type: AWS::Serverless::Function
 
     Properties:
 
-      Engine: mysql
+      FunctionName:
+        !Sub CloudMart-Customer-API-${Environment}
 
-      EngineVersion: '8.0.46'
+      Runtime: python3.12
 
-      DBName: !Ref DBName
+      Handler: lambda_function.lambda_handler
 
-      MasterUsername: !Ref DBUsername
+      CodeUri: ../../src/customer/
 
-      MasterUserPassword: !Ref DBPassword
+      MemorySize: 256
 
-      DBInstanceClass: !Ref DBInstanceClass
+      Timeout: 30
 
-      AllocatedStorage: !Ref DBAllocatedStorage
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
 
-      StorageType: gp3
+      VpcConfig:
 
-      DBSubnetGroupName:
-        Ref: CloudMartDBSubnetGroup
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Lambda-SG-ID
 
-      VPCSecurityGroups:
-        - Fn::ImportValue: CloudMart-RDS-SG-ID
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-ID
 
-      PubliclyAccessible: false
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-2-ID
 
-      BackupRetentionPeriod: 0
+      Environment:
 
-      CopyTagsToSnapshot: true
+        Variables:
 
-      StorageEncrypted: true
+          ENVIRONMENT:
+            !Ref Environment
 
-      DeletionProtection: false
+      Events:
 
-      Tags:
+        CreateCustomer:
 
-        - Key: Name
-          Value: CloudMart-RDS
+          Type: Api
 
-        - Key: Project
-          Value: CloudMart
+          Properties:
 
-        - Key: Environment
-          Value: dev
+            RestApiId:
+              !Ref ProductApi
 
-        - Key: CostProfile
-          Value: FreeTier-Development
+            Path: /customer
+
+            Method: POST
+
+            Auth:
+              Authorizer: NONE
 
 
-# ==========================================================
-# OUTPUTS
-# ==========================================================
+        GetCustomers:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /customer
+
+            Method: GET
+
+
+        GetCustomer:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /customer/{id}
+
+            Method: GET
+
+
+        UpdateCustomer:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /customer/{id}
+
+            Method: PUT
+
+
+        DeleteCustomer:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /customer/{id}
+
+            Method: DELETE
+
+
+  OrderApiFunction:
+
+    Type: AWS::Serverless::Function
+
+    Properties:
+
+      FunctionName:
+        !Sub CloudMart-Order-API-${Environment}
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      CodeUri: ../../src/order/
+
+      MemorySize: 256
+
+      Timeout: 30
+
+      Role:
+        Fn::ImportValue:
+          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+
+      VpcConfig:
+
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Lambda-SG-ID
+
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-ID
+
+          - Fn::ImportValue:
+              !Sub CloudMart-Private-Subnet-2-ID
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+      Events:
+
+        CreateOrder:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order
+
+            Method: POST
+
+
+        GetOrders:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order
+
+            Method: GET
+
+
+        GetOrder:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order/{id}
+
+            Method: GET
+
+
+        UpdateOrder:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order/{id}
+
+            Method: PUT
+
+
+        GetCustomerOrders:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order/customer/{id}
+
+            Method: GET
+
+
+        CancelOrder:
+
+          Type: Api
+
+          Properties:
+
+            RestApiId:
+              !Ref ProductApi
+
+            Path: /order/{id}
+
+            Method: PATCH
+
+
+  ProductApi:
+
+    Type: AWS::Serverless::Api
+
+    Properties:
+
+      Name:
+        !Sub CloudMart-Product-Customer-Order-API-${Environment}
+
+      StageName:
+        !Ref Environment
+
+      EndpointConfiguration:
+        Type: REGIONAL
+
+      Cors:
+
+        AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+
+        AllowHeaders: "'Content-Type,Authorization'"
+
+        AllowOrigin: "'*'"
+
+      Auth:
+
+        DefaultAuthorizer: CloudMartAuthorizer
+
+        Authorizers:
+
+          CloudMartAuthorizer:
+
+            FunctionArn:
+              Fn::ImportValue:
+                !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
+
+            FunctionPayloadType: REQUEST
+
+            Identity:
+
+              Headers:
+                - Authorization
+
+            AuthorizerResultTtlInSeconds: 0
+
 
 Outputs:
 
-  # --------------------------------------------------------
-  # DATABASE IDENTIFIER
-  # --------------------------------------------------------
+  ProductApiUrl:
 
-  DatabaseIdentifier:
-
-    Description: CloudMart RDS database identifier
-
-    Value: !Ref CloudMartDatabase
-
-    Export:
-      Name: CloudMart-DatabaseIdentifier
-
-
-  # --------------------------------------------------------
-  # DATABASE ENDPOINT
-  # --------------------------------------------------------
-
-  DatabaseEndpoint:
-
-    Description: CloudMart RDS endpoint
+    Description: CloudMart API URL
 
     Value:
-      Fn::GetAtt:
-        - CloudMartDatabase
-        - Endpoint.Address
 
-    Export:
-      Name: CloudMart-DatabaseEndpoint
+      !Sub
+        - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+
+        - ApiId:
+            !Ref ProductApi
 
 
-  # --------------------------------------------------------
-  # DATABASE PORT
-  # --------------------------------------------------------
+  ProductApiFunctionArn:
 
-  DatabasePort:
-
-    Description: CloudMart RDS MySQL port
+    Description: CloudMart Product Lambda ARN
 
     Value:
-      Fn::GetAtt:
-        - CloudMartDatabase
-        - Endpoint.Port
+      !GetAtt ProductApiFunction.Arn
 
     Export:
-      Name: CloudMart-DatabasePort
+      Name:
+        !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
 
 
-  # --------------------------------------------------------
-  # DATABASE NAME
-  # --------------------------------------------------------
+  ProductApiFunctionName:
 
-  DatabaseName:
-
-    Description: CloudMart database name
-
-    Value: !Ref DBName
-
-    Export:
-      Name: CloudMart-DatabaseName
-
-
-  # --------------------------------------------------------
-  # DATABASE SUBNET GROUP
-  # --------------------------------------------------------
-
-  DatabaseSubnetGroup:
-
-    Description: CloudMart RDS DB subnet group
+    Description: CloudMart Product Lambda name
 
     Value:
-      Ref: CloudMartDBSubnetGroup
+      !Ref ProductApiFunction
 
     Export:
-      Name: CloudMart-DatabaseSubnetGroup
+      Name:
+        !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
+
+
+  CustomerApiFunctionArn:
+
+    Description: CloudMart Customer Lambda ARN
+
+    Value:
+      !GetAtt CustomerApiFunction.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-Customer-Api-Lambda-Arn-${Environment}
+
+
+  CustomerApiFunctionName:
+
+    Description: CloudMart Customer Lambda name
+
+    Value:
+      !Ref CustomerApiFunction
+
+    Export:
+      Name:
+        !Sub CloudMart-Customer-Api-Lambda-Name-${Environment}
+
+
+  OrderApiFunctionArn:
+
+    Description: CloudMart Order Lambda ARN
+
+    Value:
+      !GetAtt OrderApiFunction.Arn
+
+    Export:
+      Name:
+        !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
+
+
+  OrderApiFunctionName:
+
+    Description: CloudMart Order Lambda name
+
+    Value:
+      !Ref OrderApiFunction
+
+    Export:
+      Name:
+        !Sub CloudMart-Order-Api-Lambda-Name-${Environment}
