@@ -1,18 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
 
 Description: CloudMart Database Stack 
-
 # ==========================================================
 # PARAMETERS
 # ==========================================================
 
 Parameters:
-
-  Environment:
-    Type: String
-    Default: dev
-    Description: Environment name (e.g., dev, staging, prod)
 
   DBName:
     Type: String
@@ -58,19 +51,27 @@ Resources:
   # ========================================================
 
   CloudMartDBSubnetGroup:
+
     Type: AWS::RDS::DBSubnetGroup
+
     Properties:
+
       DBSubnetGroupDescription: CloudMart RDS private subnet group
+
       SubnetIds:
         - Fn::ImportValue: CloudMart-Private-Subnet-ID
         - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+
       Tags:
+
         - Key: Name
           Value: CloudMart-RDS-SubnetGroup
+
         - Key: Project
           Value: CloudMart
+
         - Key: Environment
-          Value: !Ref Environment
+          Value: dev
 
 
   # ========================================================
@@ -78,103 +79,59 @@ Resources:
   # ========================================================
 
   CloudMartDatabase:
+
     Type: AWS::RDS::DBInstance
+
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+
     Properties:
+
       Engine: mysql
+
       EngineVersion: '8.0.46'
+
       DBName: !Ref DBName
+
       MasterUsername: !Ref DBUsername
+
       MasterUserPassword: !Ref DBPassword
+
       DBInstanceClass: !Ref DBInstanceClass
+
       AllocatedStorage: !Ref DBAllocatedStorage
+
       StorageType: gp3
-      DBSubnetGroupName: !Ref CloudMartDBSubnetGroup
+
+      DBSubnetGroupName:
+        Ref: CloudMartDBSubnetGroup
+
       VPCSecurityGroups:
         - Fn::ImportValue: CloudMart-RDS-SG-ID
+
       PubliclyAccessible: false
+
       BackupRetentionPeriod: 0
+
       CopyTagsToSnapshot: true
+
       StorageEncrypted: true
+
       DeletionProtection: false
+
       Tags:
+
         - Key: Name
           Value: CloudMart-RDS
+
         - Key: Project
           Value: CloudMart
+
         - Key: Environment
-          Value: !Ref Environment
+          Value: dev
 
-  # ========================================================
-  # LAMBDA SECURITY GROUP
-  # ========================================================
-
-  InitSchemaLambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Init Schema Lambda
-      VpcId:
-        Fn::ImportValue: CloudMart-VPC-ID
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: CloudMart-InitSchema-Lambda-SG
-        - Key: Project
-          Value: CloudMart
-
-
-  # ========================================================
-  # INIT SCHEMA SAM FUNCTION
-  # ========================================================
-
-  InitSchemaLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub CloudMart-InitSchema-${Environment}
-      CodeUri: ../../src/init-schema
-      Handler: lambda_function.lambda_handler
-      Runtime: python3.11
-      Timeout: 300
-      MemorySize: 256
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref InitSchemaLambdaSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: CloudMart-Private-Subnet-ID
-          - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - Statement:
-            - Effect: Allow
-              Action:
-                - ssm:GetParameters
-                - ssm:GetParameter
-              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/database/*"
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref Environment
-      Tags:
-        Project: CloudMart
-
-
-  # ========================================================
-  # CUSTOM RESOURCE TO TRIGGER LAMBDA ON DEPLOY
-  # ========================================================
-
-  ApplySchemaCustomResource:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn: 
-      - CloudMartDatabase
-      - DBHostParameter
-      - DBPortParameter
-      - DBNameParameter
-      - DBUsernameParameter
-      - DBPasswordParameter
-    Properties:
-      ServiceToken: !GetAtt InitSchemaLambda.Arn
+        - Key: CostProfile
+          Value: FreeTier-Development
 
 
 # ==========================================================
@@ -183,14 +140,78 @@ Resources:
 
 Outputs:
 
+  # --------------------------------------------------------
+  # DATABASE IDENTIFIER
+  # --------------------------------------------------------
+
+  DatabaseIdentifier:
+
+    Description: CloudMart RDS database identifier
+
+    Value: !Ref CloudMartDatabase
+
+    Export:
+      Name: CloudMart-DatabaseIdentifier
+
+
+  # --------------------------------------------------------
+  # DATABASE ENDPOINT
+  # --------------------------------------------------------
+
   DatabaseEndpoint:
+
     Description: CloudMart RDS endpoint
-    Value: !GetAtt CloudMartDatabase.Endpoint.Address
+
+    Value:
+      Fn::GetAtt:
+        - CloudMartDatabase
+        - Endpoint.Address
+
     Export:
       Name: CloudMart-DatabaseEndpoint
 
-  InitSchemaLambdaArn:
-    Description: ARN of the Schema Initialization Lambda
-    Value: !GetAtt InitSchemaLambda.Arn
+
+  # --------------------------------------------------------
+  # DATABASE PORT
+  # --------------------------------------------------------
+
+  DatabasePort:
+
+    Description: CloudMart RDS MySQL port
+
+    Value:
+      Fn::GetAtt:
+        - CloudMartDatabase
+        - Endpoint.Port
+
     Export:
-      Name: CloudMart-InitSchemaLambdaArn
+      Name: CloudMart-DatabasePort
+
+
+  # --------------------------------------------------------
+  # DATABASE NAME
+  # --------------------------------------------------------
+
+  DatabaseName:
+
+    Description: CloudMart database name
+
+    Value: !Ref DBName
+
+    Export:
+      Name: CloudMart-DatabaseName
+
+
+  # --------------------------------------------------------
+  # DATABASE SUBNET GROUP
+  # --------------------------------------------------------
+
+  DatabaseSubnetGroup:
+
+    Description: CloudMart RDS DB subnet group
+
+    Value:
+      Ref: CloudMartDBSubnetGroup
+
+    Export:
+      Name: CloudMart-DatabaseSubnetGroup

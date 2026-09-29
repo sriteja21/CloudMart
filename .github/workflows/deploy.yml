@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - chnages 
+      - changes 
   workflow_dispatch:
 
 # ==========================================================
@@ -109,10 +109,10 @@ jobs:
           echo "Network deployment successful."
 
   # ==========================================================
-  # 3. DATABASE & INIT-SCHEMA (SAM Build & Deploy)
+  # 3. DATABASE
   # ==========================================================
   database:
-    name: Deploy Database & Init Schema
+    name: Deploy Database
     needs: network
     runs-on: ubuntu-latest
     steps:
@@ -125,14 +125,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Setup SAM
-        uses: aws-actions/setup-sam@v2
-
       - name: Validate DB Password
         run: |
           set -e
@@ -143,45 +135,19 @@ jobs:
           fi
           echo "DB_PASSWORD secret is available."
 
-      - name: Verify Init Schema Source
-        run: |
-          set -e
-          echo "=============================================="
-          echo "Verifying Database Init Schema Files"
-          echo "=============================================="
-          
-          if [ -d "src/init-schema" ]; then
-            echo "Directory src/init-schema exists."
-            ls -la src/init-schema
-          else
-            echo "Warning: src/init-schema directory missing."
-            exit 1
-          fi
-
-      - name: Build Database & Schema SAM Template
-        run: |
-          set -e
-          sam build \
-            --template-file infrastructure/cloudformation/data.yml
-
-          echo "Database template build successful."
-
-      - name: Deploy Database via SAM
+      - name: Deploy Database
         run: |
           set -e
           echo "=============================================="
           echo "Deploying CloudMart Database"
           echo "=============================================="
 
-          sam deploy \
-            --template-file .aws-sam/build/template.yaml \
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/data.yml \
             --stack-name cloudmart-data \
             --region "$AWS_REGION" \
-            --resolve-s3 \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --parameter-overrides \
               DBPassword="${{ secrets.DB_PASSWORD }}" \
-            --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
           echo "Database deployment successful."
@@ -269,10 +235,10 @@ jobs:
           echo "All required IAM exports verified."
 
   # ==========================================================
-  # 5. AUTHORIZER
+  # 5. AUTHORIZER & INIT SCHEMA (SAM Build & Deploy)
   # ==========================================================
   auth:
-    name: Deploy Authorizer
+    name: Deploy Authorizer & Init Schema
     needs: iam
     runs-on: ubuntu-latest
     steps:
@@ -285,13 +251,27 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Python 3.11
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Setup SAM
         uses: aws-actions/setup-sam@v2
+
+      - name: Verify Auth & Init Schema Source
+        run: |
+          set -e
+          echo "=============================================="
+          echo "Verifying Auth & Init Schema Source Files"
+          echo "=============================================="
+          
+          if [ -d "src/authorizer" ] && [ -d "src/init-schema" ]; then
+            echo "Source directories exist."
+          else
+            echo "Error: Authorizer or Init-Schema directory is missing."
+            exit 1
+          fi
 
       - name: Validate Authorizer
         run: |
@@ -301,7 +281,7 @@ jobs:
 
           echo "Authorizer template validation successful."
 
-      - name: Build Authorizer
+      - name: Build Authorizer Stack
         run: |
           set -e
           sam build \
@@ -309,15 +289,21 @@ jobs:
 
           echo "Authorizer build successful."
 
-      - name: Deploy Authorizer
+      - name: Deploy Authorizer Stack
         run: |
           set -e
+          echo "=============================================="
+          echo "Deploying CloudMart Authorizer Stack"
+          echo "=============================================="
+
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name cloudmart-auth \
             --region "$AWS_REGION" \
             --resolve-s3 \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --parameter-overrides \
+              Environment="$ENVIRONMENT" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -327,7 +313,7 @@ jobs:
         run: |
           set -e
           aws lambda get-function \
-            --function-name CloudMart-Lambda-Authorizer-dev \
+            --function-name CloudMart-Lambda-Authorizer-${ENVIRONMENT} \
             --region "$AWS_REGION" \
             >/dev/null
 
@@ -831,13 +817,13 @@ jobs:
           then
             aws cloudformation wait stack-create-complete \
               --stack-name "${DASHBOARD_STACK_NAME}" \
-              --region "${AWS_REGION}"
+              --region "$AWS_REGION"
           elif [[ "$STATUS" == "UPDATE_IN_PROGRESS" ]] || \
                [[ "$STATUS" == "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS" ]]
           then
             aws cloudformation wait stack-update-complete \
               --stack-name "${DASHBOARD_STACK_NAME}" \
-              --region "${AWS_REGION}"
+              --region "$AWS_REGION"
           fi
 
           echo "Dashboard stack is ready."
