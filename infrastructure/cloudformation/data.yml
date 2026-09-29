@@ -106,47 +106,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-
-  # ========================================================
-  # SSM PARAMETERS
-  # ========================================================
-
-  DBHostParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/app/${Environment}/database/host'
-      Type: String
-      Value: !GetAtt CloudMartDatabase.Endpoint.Address
-
-  DBPortParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/app/${Environment}/database/port'
-      Type: String
-      Value: !GetAtt CloudMartDatabase.Endpoint.Port
-
-  DBNameParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/app/${Environment}/database/name'
-      Type: String
-      Value: !Ref DBName
-
-  DBUsernameParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/app/${Environment}/database/username'
-      Type: String
-      Value: !Ref DBUsername
-
-  DBPasswordParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/app/${Environment}/database/password'
-      Type: String
-      Value: !Ref DBPassword
-
-
   # ========================================================
   # LAMBDA SECURITY GROUP
   # ========================================================
