@@ -464,6 +464,33 @@ def create_order(event):
                     }
                 )
 
+            # Always populate order_items so the failed order retains item details
+            order_items = []
+            for product in products:
+                cur.execute(
+                    """
+                    INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        order_id,
+                        product["product_id"],
+                        product["quantity"],
+                        product["unit_price"],
+                        product["total_price"]
+                    )
+                )
+
+                order_items.append(
+                    {
+                        "product_id": product["product_id"],
+                        "product_name": product["product_name"],
+                        "quantity": product["quantity"],
+                        "unit_price": product["unit_price"],
+                        "total_price": product["total_price"]
+                    }
+                )
+
             failed_product = None
 
             for product in products:
@@ -479,8 +506,8 @@ def create_order(event):
                 )
 
                 cur.execute(
-                    "UPDATE orders SET status='FAILED', total_amount=0 WHERE order_id=%s",
-                    (order_id,)
+                    "UPDATE orders SET status='FAILED', total_amount=%s WHERE order_id=%s",
+                    (total, order_id)
                 )
 
                 cur.execute(
@@ -508,6 +535,8 @@ def create_order(event):
                             },
                             "previous_status": "PENDING",
                             "status": "FAILED",
+                            "total_amount": total,
+                            "items": order_items,
                             "reason": reason
                         }
                     )
@@ -521,23 +550,16 @@ def create_order(event):
                         "order_id": order_id,
                         "order_number": order_number,
                         "status": "FAILED",
+                        "total_amount": total,
+                        "items": order_items,
                         "reason": reason
                     }
                 )
 
-            order_items = []
-
+            # Deduct inventory for confirmed orders
             for product in products:
                 product_id = product["product_id"]
                 quantity = product["quantity"]
-
-                cur.execute(
-                    """
-                    INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (order_id, product_id, quantity, product["unit_price"], product["total_price"])
-                )
 
                 cur.execute(
                     """
@@ -572,16 +594,6 @@ def create_order(event):
 
                 if int(product["available"]) > reorder_threshold and after_quantity <= reorder_threshold:
                     low_stock_events += 1
-
-                order_items.append(
-                    {
-                        "product_id": product_id,
-                        "product_name": product["product_name"],
-                        "quantity": quantity,
-                        "unit_price": product["unit_price"],
-                        "total_price": product["total_price"]
-                    }
-                )
 
             cur.execute(
                 "UPDATE orders SET status='CONFIRMED', total_amount=%s WHERE order_id=%s",
