@@ -87,7 +87,7 @@ Resources:
       FunctionName: !Sub CloudMart-InitSchema-${Environment}
       CodeUri: ../../src/init-schema/
       Handler: lambda_function.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.12
       Timeout: 300
       MemorySize: 256
       VpcConfig:
