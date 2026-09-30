@@ -58,116 +58,45 @@ Resources:
               }
             },
             {
-              "type": "text",
-              "x": 0, "y": 2, "width": 24, "height": 2,
+              "type": "metric",
+              "x": 0, "y": 2, "width": 24, "height": 8,
               "properties": {
-                "markdown": "## API Gateway Health & Latency"
+                "title": "API Gateway Health & Latency",
+                "view": "timeSeries",
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "Sum" }],
+                  ["AWS/ApiGateway", "4XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "Sum" }],
+                  ["AWS/ApiGateway", "5XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "Sum" }],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95", "yAxis": "right" }],
+                  ["AWS/ApiGateway", "IntegrationLatency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95", "yAxis": "right" }]
+                ],
+                "yAxis": {
+                  "left": { "label": "Requests / Errors" },
+                  "right": { "label": "Latency (ms)" }
+                }
               }
             },
             {
               "type": "metric",
-              "x": 0, "y": 4, "width": 6, "height": 6,
+              "x": 0, "y": 10, "width": 24, "height": 8,
               "properties": {
-                "title": "API Gateway Request Count",
+                "title": "Lambda Health & Performance (Invocations, Errors & Throttles)",
                 "view": "timeSeries",
                 "region": "${AWS::Region}",
                 "period": 300,
                 "stat": "Sum",
-                "metrics": [
-                  ["AWS/ApiGateway", "Count", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 6, "y": 4, "width": 6, "height": 6,
-              "properties": {
-                "title": "API Gateway Errors (4XX & 5XX)",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  ["AWS/ApiGateway", "4XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"],
-                  ["AWS/ApiGateway", "5XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 12, "y": 4, "width": 12, "height": 6,
-              "properties": {
-                "title": "API Gateway Latency (p95 / p99)",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
-                  ["AWS/ApiGateway", "Latency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95" }],
-                  ["AWS/ApiGateway", "IntegrationLatency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95" }]
-                ]
-              }
-            },
-            {
-              "type": "text",
-              "x": 0, "y": 10, "width": 24, "height": 2,
-              "properties": {
-                "markdown": "## Lambda Health & Performance"
-              }
-            },
-            {
-              "type": "metric",
-              "x": 0, "y": 12, "width": 6, "height": 7,
-              "properties": {
-                "title": "Product Lambda",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
                 "metrics": [
                   ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Product-API-${Environment}"],
                   ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Product-API-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Product-API-${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 6, "y": 12, "width": 6, "height": 7,
-              "properties": {
-                "title": "Order Lambda",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Product-API-${Environment}"],
                   ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Order-API-${Environment}"],
                   ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Order-API-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Order-API-${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 12, "y": 12, "width": 6, "height": 7,
-              "properties": {
-                "title": "Authorizer Lambda",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Order-API-${Environment}"],
                   ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"],
                   ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 18, "y": 12, "width": 6, "height": 7,
-              "properties": {
-                "title": "Report Lambda",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"],
                   ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Report-Lambda-${Environment}"],
                   ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Report-Lambda-${Environment}"],
                   ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Report-Lambda-${Environment}"]
@@ -175,113 +104,38 @@ Resources:
               }
             },
             {
-              "type": "text",
-              "x": 0, "y": 19, "width": 24, "height": 2,
-              "properties": {
-                "markdown": "## RDS Database Health"
-              }
-            },
-            {
               "type": "metric",
-              "x": 0, "y": 21, "width": 8, "height": 7,
+              "x": 0, "y": 18, "width": 24, "height": 8,
               "properties": {
-                "title": "RDS CPU & Connections",
+                "title": "RDS Database Health & Performance",
                 "view": "timeSeries",
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
-                ]
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${DBInstanceIdentifier}", { "stat": "Average" }],
+                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${DBInstanceIdentifier}", { "stat": "Average" }],
+                  ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}", { "stat": "Average", "yAxis": "right" }],
+                  ["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}", { "stat": "Average", "yAxis": "right" }]
+                ],
+                "yAxis": {
+                  "left": { "label": "CPU % / Connections" },
+                  "right": { "label": "IOPS" }
+                }
               }
             },
             {
               "type": "metric",
-              "x": 8, "y": 21, "width": 8, "height": 7,
+              "x": 0, "y": 26, "width": 24, "height": 8,
               "properties": {
-                "title": "RDS Freeable Memory & Storage",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
-                  ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 16, "y": 21, "width": 8, "height": 7,
-              "properties": {
-                "title": "RDS Write/Read IOPS",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "metrics": [
-                  ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
-                ]
-              }
-            },
-            {
-              "type": "text",
-              "x": 0, "y": 28, "width": 24, "height": 2,
-              "properties": {
-                "markdown": "## CloudMart Business Metrics"
-              }
-            },
-            {
-              "type": "metric",
-              "x": 0, "y": 30, "width": 6, "height": 6,
-              "properties": {
-                "title": "Orders Placed",
+                "title": "CloudMart Business Metrics",
                 "view": "timeSeries",
                 "region": "${AWS::Region}",
                 "period": 300,
                 "stat": "Sum",
                 "metrics": [
-                  ["CloudMart/Operations", "OrdersPlaced", "Environment", "${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 6, "y": 30, "width": 6, "height": 6,
-              "properties": {
-                "title": "Orders Cancelled",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  ["CloudMart/Operations", "OrdersCancelled", "Environment", "${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 12, "y": 30, "width": 6, "height": 6,
-              "properties": {
-                "title": "Orders Failed",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
-                  ["CloudMart/Operations", "OrdersFailed", "Environment", "${Environment}"]
-                ]
-              }
-            },
-            {
-              "type": "metric",
-              "x": 18, "y": 30, "width": 6, "height": 6,
-              "properties": {
-                "title": "Low Stock Events",
-                "view": "timeSeries",
-                "region": "${AWS::Region}",
-                "period": 300,
-                "stat": "Sum",
-                "metrics": [
+                  ["CloudMart/Operations", "OrdersPlaced", "Environment", "${Environment}"],
+                  ["CloudMart/Operations", "OrdersCancelled", "Environment", "${Environment}"],
+                  ["CloudMart/Operations", "OrdersFailed", "Environment", "${Environment}"],
                   ["CloudMart/Operations", "LowStockEvents", "Environment", "${Environment}"]
                 ]
               }
@@ -297,7 +151,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub CloudMart-${Environment}-OrdersCancelled
-      AlarmDescription: Alarm when 5 or more orders are cancelled within 5 minutes.
+      AlarmDescription: Alarm when 5 or more orders are cancelled within a 5-minute period.
       Namespace: CloudMart/Operations
       MetricName: OrdersCancelled
       Dimensions:
