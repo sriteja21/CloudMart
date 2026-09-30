@@ -52,23 +52,65 @@ def hash_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def get_customer_from_token(token):
+def extract_customer_id_from_event(event):
+    # 1. Check query parameters (?customer_id=X)
+    query_params = event.get("queryStringParameters") or {}
+    customer_id = query_params.get("customer_id")
+
+    if customer_id and str(customer_id).isdigit():
+        return int(customer_id)
+
+    # 2. Check JSON request body
+    body = event.get("body")
+    if body:
+        try:
+            if isinstance(body, str):
+                body = json.loads(body)
+
+            if isinstance(body, dict):
+                customer_id = body.get("customer_id")
+                if customer_id and str(customer_id).isdigit():
+                    return int(customer_id)
+        except Exception:
+            pass
+
+    return None
+
+
+def extract_token_from_event(event):
+    headers = event.get("headers") or {}
+    authorization_header = (
+        headers.get("Authorization") or headers.get("authorization")
+    )
+
+    if not authorization_header:
+        return None
+
+    parts = authorization_header.strip().split()
+
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    return parts[1].strip()
+
+
+def verify_customer_and_token(customer_id, token):
     connection = None
 
     try:
         token_hash = hash_token(token)
-
         connection = get_db_connection()
 
         with connection.cursor() as cursor:
+            # Look up by customer_id and confirm token_hash matches
             cursor.execute(
                 """
                 SELECT customer_id, role
                 FROM customers
-                WHERE token_hash = %s
+                WHERE customer_id = %s AND token_hash = %s
                 LIMIT 1
                 """,
-                (token_hash,)
+                (customer_id, token_hash)
             )
 
             customer = cursor.fetchone()
@@ -229,30 +271,20 @@ def deny(event):
 
 def lambda_handler(event, context):
     try:
-        headers = event.get("headers") or {}
+        # Extract customer_id from URL query or request body
+        customer_id = extract_customer_id_from_event(event)
 
-        authorization_header = (
-            headers.get("Authorization")
-            or headers.get("authorization")
-        )
-
-        if not authorization_header:
+        if not customer_id:
             return deny(event)
 
-        parts = authorization_header.strip().split()
+        # Extract Bearer token from authorization header
+        token = extract_token_from_event(event)
 
-        if len(parts) != 2:
+        if not token:
             return deny(event)
 
-        if parts[0].lower() != "bearer":
-            return deny(event)
-
-        client_token = parts[1].strip()
-
-        if not client_token:
-            return deny(event)
-
-        customer = get_customer_from_token(client_token)
+        # Verify customer_id exists and matches the token hash
+        customer = verify_customer_and_token(customer_id, token)
 
         if not customer:
             return deny(event)
