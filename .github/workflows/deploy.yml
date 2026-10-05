@@ -28,10 +28,10 @@ permissions:
 jobs:
 
   # ==========================================================
-  # 1. VALIDATE STACK
+  # 1. VALIDATE STACK & PARAMETERS
   # ==========================================================
   validate-templates:
-    name: Validate CloudFormation Templates
+    name: Validate CloudFormation Templates & Parameters
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -42,6 +42,28 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate Parameters JSON File
+        run: |
+          set -e
+          echo "=============================================="
+          echo "Checking parameters.json for null/empty values"
+          echo "=============================================="
+
+          if [ ! -f "${{ env.PARAM_FILE }}" ]; then
+            echo "Error: Parameter file ${{ env.PARAM_FILE }} not found!"
+            exit 1
+          fi
+
+          EMPTY_PARAMS=$(jq -r '.[] | select(.ParameterValue == null or .ParameterValue == "") | .ParameterKey' ${{ env.PARAM_FILE }})
+
+          if [ -n "$EMPTY_PARAMS" ]; then
+            echo "Error: The following ParameterKeys have empty values in ${{ env.PARAM_FILE }}:"
+            echo "$EMPTY_PARAMS"
+            exit 1
+          fi
+
+          echo "All parameter keys in ${{ env.PARAM_FILE }} contain valid values."
 
       - name: Run CloudFormation Template Validation
         run: |
@@ -131,10 +153,8 @@ jobs:
           set -e
           if [ -z "${{ secrets.DB_PASSWORD }}" ]
           then
-            echo "DB_PASSWORD secret is missing"
-            exit 1
+            echo "DB_PASSWORD secret is missing. Falling back to parameters.json value if present."
           fi
-          echo "DB_PASSWORD secret is available."
 
       - name: Execute Database Stack Deployment
         run: |
@@ -143,12 +163,21 @@ jobs:
           echo "Deploying CloudMart Database Stack"
           echo "=============================================="
 
-          aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/data.yml \
-            --stack-name "cloudmart-${{ env.ENV_NAME }}-data-stack" \
-            --region "$AWS_REGION" \
-            --parameter-overrides "file://${{ env.PARAM_FILE }}" DBMasterUserPassword="${{ secrets.DB_PASSWORD }}" \
-            --no-fail-on-empty-changeset
+          if [ -n "${{ secrets.DB_PASSWORD }}" ]; then
+            aws cloudformation deploy \
+              --template-file infrastructure/cloudformation/data.yml \
+              --stack-name "cloudmart-${{ env.ENV_NAME }}-data-stack" \
+              --region "$AWS_REGION" \
+              --parameter-overrides "file://${{ env.PARAM_FILE }}" DBMasterUserPassword="${{ secrets.DB_PASSWORD }}" \
+              --no-fail-on-empty-changeset
+          else
+            aws cloudformation deploy \
+              --template-file infrastructure/cloudformation/data.yml \
+              --stack-name "cloudmart-${{ env.ENV_NAME }}-data-stack" \
+              --region "$AWS_REGION" \
+              --parameter-overrides "file://${{ env.PARAM_FILE }}" \
+              --no-fail-on-empty-changeset
+          fi
 
           echo "Database deployment successful."
 
@@ -255,10 +284,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set Environment Name
+      - name: Parse Parameters & Set Environment Name
         run: |
           ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
           echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
+          PARSED_PARAMS=$(jq -r '.[] | "\(.ParameterKey)=\"\(.ParameterValue)\""' ${{ env.PARAM_FILE }} | xargs)
+          echo "PARSED_PARAMS=$PARSED_PARAMS" >> "$GITHUB_ENV"
 
       - name: Setup Python Runtime Environment
         uses: actions/setup-python@v5
@@ -311,7 +343,7 @@ jobs:
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
+            --parameter-overrides ${{ env.PARSED_PARAMS }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -426,10 +458,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set Environment Name
+      - name: Parse Parameters & Set Environment Name
         run: |
           ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
           echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
+          PARSED_PARAMS=$(jq -r '.[] | "\(.ParameterKey)=\"\(.ParameterValue)\""' ${{ env.PARAM_FILE }} | xargs)
+          echo "PARSED_PARAMS=$PARSED_PARAMS" >> "$GITHUB_ENV"
 
       - name: Setup Python Runtime Environment
         uses: actions/setup-python@v5
@@ -477,7 +512,7 @@ jobs:
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
+            --parameter-overrides ${{ env.PARSED_PARAMS }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -513,10 +548,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Reporting
 
-      - name: Set Environment Name
+      - name: Parse Parameters & Set Environment Name
         run: |
           ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
           echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
+          PARSED_PARAMS=$(jq -r '.[] | "\(.ParameterKey)=\"\(.ParameterValue)\""' ${{ env.PARAM_FILE }} | xargs)
+          echo "PARSED_PARAMS=$PARSED_PARAMS" >> "$GITHUB_ENV"
 
       - name: Verify AWS Identity
         run: |
@@ -576,7 +614,7 @@ jobs:
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
+            --parameter-overrides ${{ env.PARSED_PARAMS }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
