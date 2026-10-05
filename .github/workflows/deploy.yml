@@ -13,6 +13,7 @@ on:
 env:
   AWS_REGION: ap-south-1
   SAM_CLI_TELEMETRY: 0
+  PARAM_FILE: infrastructure/config/parameters.json
 
 # ==========================================================
 # PERMISSIONS
@@ -82,6 +83,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Execute Network Stack Deployment
         run: |
           set -e
@@ -91,9 +97,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/network.yml \
-            --stack-name cloudmart-dev-network-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-network-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --no-fail-on-empty-changeset
 
           echo "Network deployment successful."
@@ -115,6 +121,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Validate Database Password Secret
         run: |
           set -e
@@ -134,9 +145,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/data.yml \
-            --stack-name cloudmart-dev-data-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-data-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json DBMasterUserPassword="${{ secrets.DB_PASSWORD }}" \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" DBMasterUserPassword="${{ secrets.DB_PASSWORD }}" \
             --no-fail-on-empty-changeset
 
           echo "Database deployment successful."
@@ -145,7 +156,7 @@ jobs:
         run: |
           set -e
           DB_ID=$(aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-data-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-data-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs[?OutputKey=='DatabaseIdentifier'].OutputValue | [0]" \
             --output text)
@@ -176,6 +187,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Execute IAM Stack Deployment
         run: |
           set -e
@@ -185,9 +201,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/iam.yml \
-            --stack-name cloudmart-dev-iam-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-iam-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
@@ -199,13 +215,13 @@ jobs:
           echo "Checking IAM exports..."
 
           for export in \
-            CloudMart-LambdaExecutionRoleArn-dev \
-            CloudMart-LambdaAuthorizerRoleArn-dev \
+            CloudMart-LambdaExecutionRoleArn-${{ env.ENV_NAME }} \
+            CloudMart-LambdaAuthorizerRoleArn-${{ env.ENV_NAME }} \
             CloudMart-DatabaseEndpoint \
             CloudMart-DatabasePort \
             CloudMart-DatabaseName \
-            CloudMart-DashboardEC2RoleArn-dev \
-            CloudMart-DashboardEC2InstanceProfileArn-dev
+            CloudMart-DashboardEC2RoleArn-${{ env.ENV_NAME }} \
+            CloudMart-DashboardEC2InstanceProfileArn-${{ env.ENV_NAME }}
           do
             echo "Checking export: $export"
             VALUE=$(aws cloudformation list-exports \
@@ -238,6 +254,11 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
 
       - name: Setup Python Runtime Environment
         uses: actions/setup-python@v5
@@ -286,11 +307,11 @@ jobs:
 
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
-            --stack-name cloudmart-dev-auth-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-auth-stack" \
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -323,6 +344,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Validate Email Notification Secrets
         run: |
           set -e
@@ -349,9 +375,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/event-driven-stack.yml \
-            --stack-name cloudmart-dev-event-driven-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-event-driven-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" OrderNotificationEmail="${{ secrets.ORDER_NOTIFICATION_EMAIL }}" \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" LowStockEmail="${{ secrets.LOW_STOCK_EMAIL }}" OrderNotificationEmail="${{ secrets.ORDER_NOTIFICATION_EMAIL }}" \
             --no-fail-on-empty-changeset
 
           echo "Event-driven deployment successful."
@@ -400,6 +426,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Setup Python Runtime Environment
         uses: actions/setup-python@v5
         with:
@@ -442,11 +473,11 @@ jobs:
 
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
-            --stack-name cloudmart-dev-application-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-application-stack" \
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -459,7 +490,7 @@ jobs:
           echo "=============================================="
 
           aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-application-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-application-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs" \
             --output table
@@ -481,6 +512,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Reporting
+
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
 
       - name: Verify AWS Identity
         run: |
@@ -535,12 +571,12 @@ jobs:
           echo "=============================================="
 
           sam deploy \
-            --stack-name cloudmart-dev-reporting-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-reporting-stack" \
             --template-file .aws-sam/build/template.yaml \
             --region "$AWS_REGION" \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
@@ -549,7 +585,7 @@ jobs:
       - name: Display Reporting Stack Outputs
         run: |
           aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-reporting-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-reporting-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs" \
             --output table
@@ -571,6 +607,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Monitoring
+
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
 
       - name: Verify AWS Identity
         run: |
@@ -596,9 +637,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/monitoring-stack.yml \
-            --stack-name cloudmart-dev-monitoring-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-monitoring-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" \
             --no-fail-on-empty-changeset
 
           echo "Monitoring stack deployed successfully."
@@ -638,7 +679,7 @@ jobs:
           echo "=============================================="
 
           aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-monitoring-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-monitoring-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs" \
             --output table
@@ -660,11 +701,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Environment Name
+        run: |
+          ENV_NAME=$(jq -r '.[] | select(.ParameterKey=="Environment") | .ParameterValue' ${{ env.PARAM_FILE }})
+          echo "ENV_NAME=${ENV_NAME:-dev}" >> "$GITHUB_ENV"
+
       - name: Fetch Product API Endpoint
         run: |
           set -e
           API_URL=$(aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-application-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-application-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs[?OutputKey=='ProductApiUrl'].OutputValue | [0]" \
             --output text)
@@ -687,9 +733,9 @@ jobs:
 
           aws cloudformation deploy \
             --template-file infrastructure/cloudformation/dashboard-stack.yml \
-            --stack-name cloudmart-dev-dashboard-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
             --region "$AWS_REGION" \
-            --parameter-overrides file://parameters.json DashboardApiUrl="${DASHBOARD_API_URL}" \
+            --parameter-overrides "file://${{ env.PARAM_FILE }}" DashboardApiUrl="${DASHBOARD_API_URL}" \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
@@ -699,7 +745,7 @@ jobs:
         run: |
           set -e
           STATUS=$(aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-dashboard-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].StackStatus" \
             --output text)
@@ -709,13 +755,13 @@ jobs:
           if [[ "$STATUS" == "CREATE_IN_PROGRESS" ]]
           then
             aws cloudformation wait stack-create-complete \
-              --stack-name cloudmart-dev-dashboard-stack \
+              --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
               --region "$AWS_REGION"
           elif [[ "$STATUS" == "UPDATE_IN_PROGRESS" ]] || \
                [[ "$STATUS" == "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS" ]]
           then
             aws cloudformation wait stack-update-complete \
-              --stack-name cloudmart-dev-dashboard-stack \
+              --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
               --region "$AWS_REGION"
           fi
 
@@ -728,7 +774,7 @@ jobs:
           echo "=============================================="
 
           aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-dashboard-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs" \
             --output table
@@ -737,7 +783,7 @@ jobs:
         run: |
           set -e
           PUBLIC_IP=$(aws cloudformation describe-stacks \
-            --stack-name cloudmart-dev-dashboard-stack \
+            --stack-name "cloudmart-${{ env.ENV_NAME }}-dashboard-stack" \
             --region "$AWS_REGION" \
             --query "Stacks[0].Outputs[?OutputKey=='DashboardPublicIP'].OutputValue | [0]" \
             --output text)
@@ -763,16 +809,17 @@ jobs:
           echo "================================================"
           echo ""
           echo "AWS Region: ${{ env.AWS_REGION }}"
+          echo "Environment: ${{ env.ENV_NAME }}"
           echo ""
           echo "Stacks Deployed:"
-          echo "  1. cloudmart-dev-network-stack"
-          echo "  2. cloudmart-dev-data-stack"
-          echo "  3. cloudmart-dev-iam-stack"
-          echo "  4. cloudmart-dev-auth-stack"
-          echo "  5. cloudmart-dev-event-driven-stack"
-          echo "  6. cloudmart-dev-application-stack"
-          echo "  7. cloudmart-dev-reporting-stack"
-          echo "  8. cloudmart-dev-monitoring-stack"
-          echo "  9. cloudmart-dev-dashboard-stack"
+          echo "  1. cloudmart-${{ env.ENV_NAME }}-network-stack"
+          echo "  2. cloudmart-${{ env.ENV_NAME }}-data-stack"
+          echo "  3. cloudmart-${{ env.ENV_NAME }}-iam-stack"
+          echo "  4. cloudmart-${{ env.ENV_NAME }}-auth-stack"
+          echo "  5. cloudmart-${{ env.ENV_NAME }}-event-driven-stack"
+          echo "  6. cloudmart-${{ env.ENV_NAME }}-application-stack"
+          echo "  7. cloudmart-${{ env.ENV_NAME }}-reporting-stack"
+          echo "  8. cloudmart-${{ env.ENV_NAME }}-monitoring-stack"
+          echo "  9. cloudmart-${{ env.ENV_NAME }}-dashboard-stack"
           echo ""
           echo "================================================"
