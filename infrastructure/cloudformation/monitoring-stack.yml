@@ -9,16 +9,11 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
     AllowedValues:
       - dev
+      - test
       - prod
     Description: CloudMart deployment environment
-
-  DBInstanceIdentifier:
-    Type: String
-    Default: cloudmart-db-dev
-    Description: RDS Instance Identifier for MySQL database monitoring
 
 Resources:
 
@@ -29,7 +24,7 @@ Resources:
   MonitoringAlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub CloudMart-${Environment}-Monitoring-Alarms
+      TopicName: !Sub cloudmart-${Environment}-monitoring-alarms
       DisplayName: !Sub CloudMart ${Environment} Monitoring Alarms
       Tags:
         - Key: Project
@@ -47,7 +42,11 @@ Resources:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: !Sub cloudmart-operations-${Environment}
-      DashboardBody: !Sub |
+      DashboardBody: !Sub 
+        Fn::Transform:
+          - Name: AWS::Include
+            Parameters: {}
+        |
         {
           "widgets": [
             {
@@ -68,7 +67,7 @@ Resources:
                 "period": 300,
                 "stat": "Sum",
                 "metrics": [
-                  ["AWS/ApiGateway", "Count", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"]
+                  ["AWS/ApiGateway", "Count", "ApiName", "cloudmart-${Environment}-product-customer-order-api", "Stage", "${Environment}"]
                 ]
               }
             },
@@ -82,8 +81,8 @@ Resources:
                 "period": 300,
                 "stat": "Sum",
                 "metrics": [
-                  ["AWS/ApiGateway", "4XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"],
-                  ["AWS/ApiGateway", "5XXError", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}"]
+                  ["AWS/ApiGateway", "4XXError", "ApiName", "cloudmart-${Environment}-product-customer-order-api", "Stage", "${Environment}"],
+                  ["AWS/ApiGateway", "5XXError", "ApiName", "cloudmart-${Environment}-product-customer-order-api", "Stage", "${Environment}"]
                 ]
               }
             },
@@ -96,8 +95,8 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/ApiGateway", "Latency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95" }],
-                  ["AWS/ApiGateway", "IntegrationLatency", "ApiName", "CloudMart-Product-Customer-Order-API-${Environment}", "Stage", "${Environment}", { "stat": "p95" }]
+                  ["AWS/ApiGateway", "Latency", "ApiName", "cloudmart-${Environment}-product-customer-order-api", "Stage", "${Environment}", { "stat": "p95" }],
+                  ["AWS/ApiGateway", "IntegrationLatency", "ApiName", "cloudmart-${Environment}-product-customer-order-api", "Stage", "${Environment}", { "stat": "p95" }]
                 ]
               }
             },
@@ -111,9 +110,9 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Product-API-${Environment}"],
-                  ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Product-API-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Product-API-${Environment}"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "cloudmart-${Environment}-product-api"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "cloudmart-${Environment}-product-api"],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "cloudmart-${Environment}-product-api"]
                 ]
               }
             },
@@ -126,9 +125,9 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Order-API-${Environment}"],
-                  ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Order-API-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Order-API-${Environment}"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "cloudmart-${Environment}-order-api"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "cloudmart-${Environment}-order-api"],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "cloudmart-${Environment}-order-api"]
                 ]
               }
             },
@@ -141,9 +140,9 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"],
-                  ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Lambda-Authorizer-${Environment}"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "cloudmart-${Environment}-lambda-authorizer"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "cloudmart-${Environment}-lambda-authorizer"],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "cloudmart-${Environment}-lambda-authorizer"]
                 ]
               }
             },
@@ -156,9 +155,9 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "FunctionName", "CloudMart-Report-Lambda-${Environment}"],
-                  ["AWS/Lambda", "Errors", "FunctionName", "CloudMart-Report-Lambda-${Environment}"],
-                  ["AWS/Lambda", "Throttles", "FunctionName", "CloudMart-Report-Lambda-${Environment}"]
+                  ["AWS/Lambda", "Invocations", "FunctionName", "cloudmart-${Environment}-report-lambda"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "cloudmart-${Environment}-report-lambda"],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "cloudmart-${Environment}-report-lambda"]
                 ]
               }
             },
@@ -172,8 +171,8 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"],
+                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"]
                 ]
               }
             },
@@ -186,8 +185,8 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
+                  ["AWS/RDS", "FreeableMemory", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"],
+                  ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"]
                 ]
               }
             },
@@ -200,8 +199,8 @@ Resources:
                 "region": "${AWS::Region}",
                 "period": 300,
                 "metrics": [
-                  ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}"],
-                  ["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "${DBInstanceIdentifier}"]
+                  ["AWS/RDS", "ReadIOPS", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"],
+                  ["AWS/RDS", "WriteIOPS", "DBInstanceIdentifier", "${cloudmartDbInstanceId}"]
                 ]
               }
             },
@@ -264,6 +263,9 @@ Resources:
             }
           ]
         }
+      DashboardBodyParameters:
+        cloudmartDbInstanceId:
+          Fn::ImportValue: !Sub cloudmart-${Environment}-db-instance-id
 
   # ==========================================================
   # BUSINESS METRIC ALARMS
@@ -272,7 +274,7 @@ Resources:
   OrdersCancelledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrdersCancelled
+      AlarmName: !Sub cloudmart-${Environment}-orders-cancelled
       AlarmDescription: Alarm when 5 or more orders are cancelled within a 5-minute period.
       Namespace: CloudMart/Operations
       MetricName: OrdersCancelled
@@ -292,7 +294,7 @@ Resources:
   OrdersFailedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrdersFailed
+      AlarmName: !Sub cloudmart-${Environment}-orders-failed
       AlarmDescription: Alarm when one or more orders fail.
       Namespace: CloudMart/Operations
       MetricName: OrdersFailed
@@ -312,7 +314,7 @@ Resources:
   LowStockEventsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-LowStockEvents
+      AlarmName: !Sub cloudmart-${Environment}-low-stock-events
       AlarmDescription: Alarm when one or more low stock events occur.
       Namespace: CloudMart/Operations
       MetricName: LowStockEvents
@@ -330,19 +332,20 @@ Resources:
         - !Ref MonitoringAlarmTopic
 
   # ==========================================================
-  # DATABASE ALARMS
+  # DATABASE ALARMS (AUTOMATIC CROSS-STACK DB INSTANCE ID)
   # ==========================================================
 
   RdsHighCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-RDS-HighCPU
+      AlarmName: !Sub cloudmart-${Environment}-rds-high-cpu
       AlarmDescription: Alarm when RDS CPU utilization exceeds 80%.
       Namespace: AWS/RDS
       MetricName: CPUUtilization
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref DBInstanceIdentifier
+          Value:
+            Fn::ImportValue: !Sub cloudmart-${Environment}-db-instance-id
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
@@ -355,13 +358,14 @@ Resources:
   RdsLowStorageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-RDS-LowStorage
+      AlarmName: !Sub cloudmart-${Environment}-rds-low-storage
       AlarmDescription: Alarm when RDS free storage falls below 5GB.
       Namespace: AWS/RDS
       MetricName: FreeStorageSpace
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref DBInstanceIdentifier
+          Value:
+            Fn::ImportValue: !Sub cloudmart-${Environment}-db-instance-id
       Statistic: Average
       Period: 300
       EvaluationPeriods: 1
@@ -378,13 +382,13 @@ Resources:
   OrderLambdaThrottlesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrderLambda-Throttles
+      AlarmName: !Sub cloudmart-${Environment}-order-lambda-throttles
       AlarmDescription: Alarm when Order Lambda is throttled.
       Namespace: AWS/Lambda
       MetricName: Throttles
       Dimensions:
         - Name: FunctionName
-          Value: !Sub CloudMart-Order-API-${Environment}
+          Value: !Sub cloudmart-${Environment}-order-api
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -397,13 +401,13 @@ Resources:
   ProductLambdaErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-ProductLambda-Errors
+      AlarmName: !Sub cloudmart-${Environment}-product-lambda-errors
       AlarmDescription: Alarm when Product Lambda has one or more errors.
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:
         - Name: FunctionName
-          Value: !Sub CloudMart-Product-API-${Environment}
+          Value: !Sub cloudmart-${Environment}-product-api
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -416,13 +420,13 @@ Resources:
   OrderLambdaErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-OrderLambda-Errors
+      AlarmName: !Sub cloudmart-${Environment}-order-lambda-errors
       AlarmDescription: Alarm when Order Lambda has one or more errors.
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:
         - Name: FunctionName
-          Value: !Sub CloudMart-Order-API-${Environment}
+          Value: !Sub cloudmart-${Environment}-order-api
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -435,13 +439,13 @@ Resources:
   AuthorizerLambdaErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-AuthorizerLambda-Errors
+      AlarmName: !Sub cloudmart-${Environment}-authorizer-lambda-errors
       AlarmDescription: Alarm when Lambda Authorizer has one or more errors.
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:
         - Name: FunctionName
-          Value: !Sub CloudMart-Lambda-Authorizer-${Environment}
+          Value: !Sub cloudmart-${Environment}-lambda-authorizer
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -454,13 +458,13 @@ Resources:
   ReportLambdaErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-ReportLambda-Errors
+      AlarmName: !Sub cloudmart-${Environment}-report-lambda-errors
       AlarmDescription: Alarm when Report Lambda has one or more errors.
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:
         - Name: FunctionName
-          Value: !Sub CloudMart-Report-Lambda-${Environment}
+          Value: !Sub cloudmart-${Environment}-report-lambda
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -477,18 +481,19 @@ Resources:
   Api4xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-API-4XX
+      AlarmName: !Sub cloudmart-${Environment}-api-4xx
       AlarmDescription: Alarm when API Gateway returns one or more 4XX responses.
       Namespace: AWS/ApiGateway
       MetricName: 4XXError
       Dimensions:
         - Name: ApiName
-          Value: !Sub CloudMart-Product-Customer-Order-API-${Environment}
+          Value: !Sub cloudmart-${Environment}-product-customer-order-api
         - Name: Stage
           Value: !Ref Environment
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
+      DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
@@ -498,18 +503,19 @@ Resources:
   Api5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub CloudMart-${Environment}-API-5XX
+      AlarmName: !Sub cloudmart-${Environment}-api-5xx
       AlarmDescription: Alarm when API Gateway returns one or more 5XX responses.
       Namespace: AWS/ApiGateway
       MetricName: 5XXError
       Dimensions:
         - Name: ApiName
-          Value: !Sub CloudMart-Product-Customer-Order-API-${Environment}
+          Value: !Sub cloudmart-${Environment}-product-customer-order-api
         - Name: Stage
           Value: !Ref Environment
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
+      DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
@@ -519,7 +525,15 @@ Resources:
 Outputs:
   OperationsDashboardName:
     Value: !Sub cloudmart-operations-${Environment}
+    Export:
+      Name: !Sub cloudmart-${Environment}-operations-dashboard-name
+
   MonitoringAlarmTopicArn:
     Value: !Ref MonitoringAlarmTopic
+    Export:
+      Name: !Sub cloudmart-${Environment}-monitoring-alarm-topic-arn
+
   OrdersCancelledAlarmName:
     Value: !Ref OrdersCancelledAlarm
+    Export:
+      Name: !Sub cloudmart-${Environment}-orders-cancelled-alarm-name

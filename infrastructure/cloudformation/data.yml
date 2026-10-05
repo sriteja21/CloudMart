@@ -1,21 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: CloudMart Database Stack 
+
 # ==========================================================
 # PARAMETERS
 # ==========================================================
 
 Parameters:
 
+  Environment:
+    Type: String
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Deployment environment (e.g., dev, test, prod)
+
   DBName:
     Type: String
-    Default: cloudmart
     Description: CloudMart database name
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
   DBUsername:
     Type: String
-    Default: cloudmartadmin
     Description: RDS MySQL master username
     MinLength: 1
     MaxLength: 16
@@ -30,13 +37,11 @@ Parameters:
 
   DBInstanceClass:
     Type: String
-    Default: db.t3.micro
-    Description: RDS MySQL instance class for development
+    Description: RDS MySQL instance class for deployment
 
   DBAllocatedStorage:
     Type: Number
-    Default: 20
-    Description: RDS allocated storage in GB for development
+    Description: RDS allocated storage in GB
     MinValue: 20
 
 
@@ -51,27 +56,20 @@ Resources:
   # ========================================================
 
   CloudMartDBSubnetGroup:
-
     Type: AWS::RDS::DBSubnetGroup
-
     Properties:
-
+      DBSubnetGroupName: !Sub cloudmart-${Environment}-db-subnet-group
       DBSubnetGroupDescription: CloudMart RDS private subnet group
-
       SubnetIds:
-        - Fn::ImportValue: CloudMart-Private-Subnet-ID
-        - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
-
+        - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-1-id
+        - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-2-id
       Tags:
-
         - Key: Name
-          Value: CloudMart-RDS-SubnetGroup
-
+          Value: !Sub cloudmart-${Environment}-db-subnet-group
         - Key: Project
           Value: CloudMart
-
         - Key: Environment
-          Value: dev
+          Value: !Ref Environment
 
 
   # ========================================================
@@ -79,59 +77,34 @@ Resources:
   # ========================================================
 
   CloudMartDatabase:
-
     Type: AWS::RDS::DBInstance
-
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
-
     Properties:
-
+      DBInstanceIdentifier: !Sub cloudmart-${Environment}-db
       Engine: mysql
-
       EngineVersion: '8.0.46'
-
       DBName: !Ref DBName
-
       MasterUsername: !Ref DBUsername
-
       MasterUserPassword: !Ref DBPassword
-
       DBInstanceClass: !Ref DBInstanceClass
-
       AllocatedStorage: !Ref DBAllocatedStorage
-
       StorageType: gp3
-
-      DBSubnetGroupName:
-        Ref: CloudMartDBSubnetGroup
-
+      DBSubnetGroupName: !Ref CloudMartDBSubnetGroup
       VPCSecurityGroups:
-        - Fn::ImportValue: CloudMart-RDS-SG-ID
-
+        - Fn::ImportValue: !Sub cloudmart-${Environment}-rds-sg-id
       PubliclyAccessible: false
-
       BackupRetentionPeriod: 0
-
       CopyTagsToSnapshot: true
-
       StorageEncrypted: true
-
       DeletionProtection: false
-
       Tags:
-
         - Key: Name
-          Value: CloudMart-RDS
-
+          Value: !Sub cloudmart-${Environment}-db
         - Key: Project
           Value: CloudMart
-
         - Key: Environment
-          Value: dev
-
-        - Key: CostProfile
-          Value: FreeTier-Development
+          Value: !Ref Environment
 
 
 # ==========================================================
@@ -140,78 +113,32 @@ Resources:
 
 Outputs:
 
-  # --------------------------------------------------------
-  # DATABASE IDENTIFIER
-  # --------------------------------------------------------
-
   DatabaseIdentifier:
-
     Description: CloudMart RDS database identifier
-
     Value: !Ref CloudMartDatabase
-
     Export:
-      Name: CloudMart-DatabaseIdentifier
-
-
-  # --------------------------------------------------------
-  # DATABASE ENDPOINT
-  # --------------------------------------------------------
+      Name: !Sub cloudmart-${Environment}-db-id
 
   DatabaseEndpoint:
-
     Description: CloudMart RDS endpoint
-
-    Value:
-      Fn::GetAtt:
-        - CloudMartDatabase
-        - Endpoint.Address
-
+    Value: !GetAtt CloudMartDatabase.Endpoint.Address
     Export:
-      Name: CloudMart-DatabaseEndpoint
-
-
-  # --------------------------------------------------------
-  # DATABASE PORT
-  # --------------------------------------------------------
+      Name: !Sub cloudmart-${Environment}-db-endpoint
 
   DatabasePort:
-
     Description: CloudMart RDS MySQL port
-
-    Value:
-      Fn::GetAtt:
-        - CloudMartDatabase
-        - Endpoint.Port
-
+    Value: !GetAtt CloudMartDatabase.Endpoint.Port
     Export:
-      Name: CloudMart-DatabasePort
-
-
-  # --------------------------------------------------------
-  # DATABASE NAME
-  # --------------------------------------------------------
+      Name: !Sub cloudmart-${Environment}-db-port
 
   DatabaseName:
-
     Description: CloudMart database name
-
     Value: !Ref DBName
-
     Export:
-      Name: CloudMart-DatabaseName
-
-
-  # --------------------------------------------------------
-  # DATABASE SUBNET GROUP
-  # --------------------------------------------------------
+      Name: !Sub cloudmart-${Environment}-db-name
 
   DatabaseSubnetGroup:
-
     Description: CloudMart RDS DB subnet group
-
-    Value:
-      Ref: CloudMartDBSubnetGroup
-
+    Value: !Ref CloudMartDBSubnetGroup
     Export:
-      Name: CloudMart-DatabaseSubnetGroup
+      Name: !Sub cloudmart-${Environment}-db-subnet-group-name

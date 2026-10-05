@@ -24,6 +24,9 @@ AUTH_PARAMETER = os.getenv(
     f"/app/{ENVIRONMENT}/auth/token",
 )
 
+# Admin ID constant for authorizer validation
+ADMIN_CUSTOMER_ID = 1
+
 ssm = boto3.client("ssm")
 s3 = boto3.client("s3")
 cloudwatch = boto3.client("cloudwatch")
@@ -41,8 +44,8 @@ def get_auth_token():
     return response["Parameter"]["Value"]
 
 
-def api_get(path):
-    """Call a CloudMart API endpoint from the EC2 backend."""
+def api_get(path, customer_id=ADMIN_CUSTOMER_ID, params=None):
+    """Call a CloudMart API endpoint from the EC2 backend with customer_id query parameter."""
     if not API_URL:
         raise RuntimeError("API_URL is not configured")
 
@@ -53,22 +56,47 @@ def api_get(path):
     url = f"{API_URL}/{path.lstrip('/')}"
     logger.info("Dashboard API GET %s", path)
 
+    # Prepare query parameters including customer_id required by authorizer
+    request_params = params or {}
+    if customer_id is not None and "customer_id" not in request_params:
+        request_params["customer_id"] = customer_id
+
     response = requests.get(
         url,
         headers={"Authorization": f"Bearer {token}"},
+        params=request_params,
         timeout=15,
     )
     response.raise_for_status()
     return response.json()
 
 
-def api_post(path, payload):
+def api_post(path, payload=None, customer_id=ADMIN_CUSTOMER_ID):
+    """Call a CloudMart POST API endpoint with customer_id query parameter and body."""
+    if not API_URL:
+        raise RuntimeError("API_URL is not configured")
+
     token = get_auth_token()
+    if not token:
+        raise RuntimeError("Dashboard API token is not configured")
+
     url = f"{API_URL}/{path.lstrip('/')}"
+    payload = payload or {}
+
+    # Attach customer_id to query parameters and payload body for authorizer compliance
+    params = {}
+    if customer_id is not None:
+        params["customer_id"] = customer_id
+        if "customer_id" not in payload:
+            payload["customer_id"] = customer_id
+
+    logger.info("Dashboard API POST %s", path)
+
     response = requests.post(
         url,
         json=payload,
         headers={"Authorization": f"Bearer {token}"},
+        params=params,
         timeout=15,
     )
     response.raise_for_status()
@@ -91,12 +119,12 @@ def dashboard_data():
     orders = []
 
     try:
-        customers = api_get("/customer").get("customers", [])
+        customers = api_get("/customer", customer_id=ADMIN_CUSTOMER_ID).get("customers", [])
     except Exception as exc:
         logger.warning("Customer API unavailable: %s", exc)
 
     try:
-        orders = api_get("/order").get("orders", [])
+        orders = api_get("/order", customer_id=ADMIN_CUSTOMER_ID).get("orders", [])
     except Exception as exc:
         logger.warning("Order API unavailable: %s", exc)
 
@@ -196,7 +224,7 @@ def product_detail(product_id):
 @app.route("/customer/<int:customer_id>")
 def customer_detail(customer_id):
     try:
-        data = api_get(f"/customer/{customer_id}")
+        data = api_get(f"/customer/{customer_id}", customer_id=ADMIN_CUSTOMER_ID)
         return render_template(
             "customer_detail.html",
             customer=data.get("customer", data),
@@ -212,7 +240,7 @@ def customer_detail(customer_id):
 @app.route("/order/<int:order_id>")
 def order_detail(order_id):
     try:
-        data = api_get(f"/order/{order_id}")
+        data = api_get(f"/order/{order_id}", customer_id=ADMIN_CUSTOMER_ID)
         return render_template(
             "order_detail.html",
             order=data.get("order", data),

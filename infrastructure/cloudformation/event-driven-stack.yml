@@ -6,16 +6,19 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
     AllowedValues:
       - dev
+      - test
       - prod
+    Description: Deployment environment
 
   LowStockEmail:
     Type: String
+    Description: Email address for low stock notifications
 
   OrderNotificationEmail:
     Type: String
+    Description: Email address for order status notifications
 
 Resources:
 
@@ -154,22 +157,22 @@ Outputs:
     Description: Low stock SNS topic ARN
     Value: !Ref LowStockTopic
     Export:
-      Name: !Sub CloudMart-${Environment}-LowStockTopicArn
+      Name: !Sub cloudmart-${Environment}-low-stock-topic-arn
 
   OrderNotificationTopicArn:
     Description: Order notification SNS topic ARN
     Value: !Ref OrderNotificationTopic
     Export:
-      Name: !Sub CloudMart-${Environment}-OrderNotificationTopicArn
+      Name: !Sub cloudmart-${Environment}-order-notification-topic-arn
 
   CloudMartEventBusArn:
     Description: CloudMart EventBridge event bus ARN
     Value: !GetAtt CloudMartEventBus.Arn
     Export:
-      Name: !Sub CloudMart-${Environment}-EventBusArn
+      Name: !Sub cloudmart-${Environment}-event-bus-arn
 
   CloudMartEventBusName:
     Description: CloudMart EventBridge event bus name
     Value: !Ref CloudMartEventBus
     Export:
-      Name: !Sub CloudMart-${Environment}-EventBusName
+      Name: !Sub cloudmart-${Environment}-event-bus-name

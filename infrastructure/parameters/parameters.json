@@ -1,32 +1,62 @@
-{
-  "Environment": "dev",
-
-  "Network": {
-    "VpcCidr": "10.0.0.0/16",
-    "PublicSubnetCidr": "10.0.1.0/24",
-    "PrivateSubnetCidr": "10.0.2.0/24",
-    "PrivateSubnet2Cidr": "10.0.3.0/24"
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
   },
-
-  "Database": {
-    "DBName": "cloudmart",
-    "DBUsername": "cloudmartadmin",
-    "DBInstanceClass": "db.t3.micro",
-    "DBAllocatedStorage": "20",
-    "DBEngine": "mysql",
-    "DBEngineVersion": "8.0"
+  {
+    "ParameterKey": "VpcCidr",
+    "ParameterValue": "10.0.0.0/16"
   },
-
-  "Application": {
-    "LambdaRuntime": "python3.12",
-    "ApiStageName": "dev"
+  {
+    "ParameterKey": "PublicSubnet1Cidr",
+    "ParameterValue": "10.0.1.0/24"
   },
-
-  "Auth": {
-    "TokenParameterPath": "/app/dev/auth"
+  {
+    "ParameterKey": "PublicSubnet2Cidr",
+    "ParameterValue": "10.0.2.0/24"
   },
-
-  "EventDriven": {
-    "EventBusName": "cloudmart-dev-event-bus"
+  {
+    "ParameterKey": "PrivateSubnet1Cidr",
+    "ParameterValue": "10.0.3.0/24"
+  },
+  {
+    "ParameterKey": "PrivateSubnet2Cidr",
+    "ParameterValue": "10.0.4.0/24"
+  },
+  {
+    "ParameterKey": "DBName",
+    "ParameterValue": "cloudmart"
+  },
+  {
+    "ParameterKey": "DBMasterUsername",
+    "ParameterValue": "admin"
+  },
+  {
+    "ParameterKey": "DBMasterUserPassword",
+    "ParameterValue": "CloudMartSecurePass123!"
+  },
+  {
+    "ParameterKey": "DBAllocatedStorage",
+    "ParameterValue": "20"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.micro"
+  },
+  {
+    "ParameterKey": "DashboardApiUrl",
+    "ParameterValue": "https://api.example.com/dev"
+  },
+  {
+    "ParameterKey": "GitHubOwner",
+    "ParameterValue": "sriteja21"
+  },
+  {
+    "ParameterKey": "GitHubRepo",
+    "ParameterValue": "CloudMart"
+  },
+  {
+    "ParameterKey": "GitHubBranch",
+    "ParameterValue": "main"
   }
-}
+]

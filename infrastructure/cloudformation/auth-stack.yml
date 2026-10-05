@@ -12,9 +12,9 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
     AllowedValues:
       - dev
+      - test
       - prod
     Description: Deployment environment
 
@@ -32,20 +32,20 @@ Resources:
   LambdaAuthorizer:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub CloudMart-Lambda-Authorizer-${Environment}
+      FunctionName: !Sub cloudmart-${Environment}-lambda-authorizer
       Runtime: python3.12
       Handler: lambda_function.lambda_handler
       CodeUri: ../../src/authorizer/
       MemorySize: 128
       Timeout: 10
       Role:
-        Fn::ImportValue: !Sub CloudMart-LambdaAuthorizerRoleArn-${Environment}
+        Fn::ImportValue: !Sub cloudmart-${Environment}-lambda-authorizer-role-arn
       VpcConfig:
         SecurityGroupIds:
-          - Fn::ImportValue: CloudMart-Lambda-SG-ID
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-lambda-sg-id
         SubnetIds:
-          - Fn::ImportValue: CloudMart-Private-Subnet-ID
-          - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-1-id
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-2-id
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -64,13 +64,13 @@ Resources:
     Properties:
       GroupDescription: Security group for Init Schema Lambda
       VpcId:
-        Fn::ImportValue: CloudMart-VPC-ID
+        Fn::ImportValue: !Sub cloudmart-${Environment}-vpc-id
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: CloudMart-InitSchema-Lambda-SG
+          Value: !Sub cloudmart-${Environment}-initschema-sg
         - Key: Project
           Value: CloudMart
         - Key: Environment
@@ -84,7 +84,7 @@ Resources:
   InitSchemaLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub CloudMart-InitSchema-${Environment}
+      FunctionName: !Sub cloudmart-${Environment}-initschema
       CodeUri: ../../src/init-schema/
       Handler: lambda_function.lambda_handler
       Runtime: python3.12
@@ -94,8 +94,8 @@ Resources:
         SecurityGroupIds:
           - !Ref InitSchemaLambdaSecurityGroup
         SubnetIds:
-          - Fn::ImportValue: CloudMart-Private-Subnet-ID
-          - Fn::ImportValue: CloudMart-Private-Subnet-2-ID
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-1-id
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-2-id
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - Statement:
@@ -123,22 +123,22 @@ Outputs:
     Description: ARN of the CloudMart Lambda Authorizer
     Value: !GetAtt LambdaAuthorizer.Arn
     Export:
-      Name: !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
+      Name: !Sub cloudmart-${Environment}-lambda-authorizer-arn
 
   LambdaAuthorizerName:
     Description: Name of the CloudMart Lambda Authorizer
     Value: !Ref LambdaAuthorizer
     Export:
-      Name: !Sub CloudMart-Lambda-Authorizer-Name-${Environment}
+      Name: !Sub cloudmart-${Environment}-lambda-authorizer-name
 
   InitSchemaLambdaArn:
     Description: ARN of the Schema Initialization Lambda
     Value: !GetAtt InitSchemaLambda.Arn
     Export:
-      Name: !Sub CloudMart-InitSchemaLambdaArn-${Environment}
+      Name: !Sub cloudmart-${Environment}-initschema-lambda-arn
 
   InitSchemaLambdaName:
     Description: Name of the Schema Initialization Lambda
     Value: !Ref InitSchemaLambda
     Export:
-      Name: !Sub CloudMart-InitSchemaLambdaName-${Environment}
+      Name: !Sub cloudmart-${Environment}-initschema-lambda-name

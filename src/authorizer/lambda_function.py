@@ -271,6 +271,13 @@ def deny(event):
 
 def lambda_handler(event, context):
     try:
+        method = get_request_method(event)
+        path = get_request_path(event)
+
+        # Allow public GET requests for product routes without token or customer_id
+        if method == "GET" and (path == "/product" or is_path_match(path, "/product/")):
+            return generate_policy("anonymous", "Allow", event, role="ANONYMOUS")
+
         # Extract customer_id from URL query or request body
         customer_id = extract_customer_id_from_event(event)
 
@@ -291,9 +298,6 @@ def lambda_handler(event, context):
 
         customer_id = customer["customer_id"]
         role = customer["role"]
-
-        method = get_request_method(event)
-        path = get_request_path(event)
 
         if not is_authorized(role, method, path):
             return generate_policy(
