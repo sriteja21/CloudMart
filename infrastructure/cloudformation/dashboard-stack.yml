@@ -62,7 +62,7 @@ Resources:
 
       IamInstanceProfile:
         Fn::ImportValue:
-          !Sub cloudmart-${Environment}-dashboard-ec2-instance-profile-name
+          !Sub cloudmart-${Environment}-dashboard-ec2-profile-name
 
 
       # ======================================================
@@ -71,7 +71,7 @@ Resources:
 
       SecurityGroupIds:
         - Fn::ImportValue:
-            !Sub cloudmart-${Environment}-ec2-sg-id
+            !Sub cloudmart-${Environment}-dashboard-sg-id
 
 
       # ======================================================
@@ -80,7 +80,7 @@ Resources:
 
       SubnetId:
         Fn::ImportValue:
-          !Sub cloudmart-${Environment}-public-subnet-1-id
+          !Sub cloudmart-${Environment}-public-subnet-id
 
 
       # ======================================================

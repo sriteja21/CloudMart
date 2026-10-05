@@ -56,28 +56,6 @@ Resources:
 
 
   # ========================================================
-  # INIT SCHEMA LAMBDA SECURITY GROUP
-  # ========================================================
-
-  InitSchemaLambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Init Schema Lambda
-      VpcId:
-        Fn::ImportValue: !Sub cloudmart-${Environment}-vpc-id
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub cloudmart-${Environment}-initschema-sg
-        - Key: Project
-          Value: CloudMart
-        - Key: Environment
-          Value: !Ref Environment
-
-
-  # ========================================================
   # INIT SCHEMA LAMBDA
   # ========================================================
 
@@ -92,7 +70,7 @@ Resources:
       MemorySize: 256
       VpcConfig:
         SecurityGroupIds:
-          - !Ref InitSchemaLambdaSecurityGroup
+          - Fn::ImportValue: !Sub cloudmart-${Environment}-lambda-sg-id
         SubnetIds:
           - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-1-id
           - Fn::ImportValue: !Sub cloudmart-${Environment}-private-subnet-2-id

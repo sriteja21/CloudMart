@@ -117,7 +117,7 @@ Outputs:
     Description: CloudMart RDS database identifier
     Value: !Ref CloudMartDatabase
     Export:
-      Name: !Sub cloudmart-${Environment}-db-id
+      Name: !Sub cloudmart-${Environment}-db-instance-id
 
   DatabaseEndpoint:
     Description: CloudMart RDS endpoint

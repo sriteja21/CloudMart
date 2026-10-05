@@ -166,7 +166,7 @@ Resources:
 
 
   # ========================================================
-  # PRODUCT / ORDER LAMBDA EXECUTION ROLE
+  # PRODUCT / ORDER / CUSTOMER LAMBDA EXECUTION ROLE
   # ========================================================
 
   LambdaExecutionRole:
@@ -193,8 +193,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Product-API-${Environment}:*
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Order-API-${Environment}:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cloudmart-${Environment}-*
         - PolicyName: LambdaCloudWatchMetrics
           PolicyDocument:
             Version: '2012-10-17'
@@ -268,7 +267,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Lambda-Authorizer-${Environment}:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cloudmart-${Environment}-*
         - PolicyName: AuthorizerSSMAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -325,7 +324,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-Report-Lambda-${Environment}:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cloudmart-${Environment}-*
         - PolicyName: ReportLambdaSSMAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -419,7 +418,7 @@ Resources:
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cloudmart-${Environment}-*
         - PolicyName: DashboardSSMReadAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -526,7 +525,7 @@ Resources:
                   - lambda:TagResource
                   - lambda:UntagResource
                 Resource:
-                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:CloudMart-*
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:cloudmart-${Environment}-*
               - Effect: Allow
                 Action:
                   - apigateway:*
@@ -623,7 +622,7 @@ Resources:
                   - logs:TagResource
                   - logs:UntagResource
                 Resource:
-                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/CloudMart-*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/cloudmart-${Environment}-*
 
 
 # ==========================================================
