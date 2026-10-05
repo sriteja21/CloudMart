@@ -68,7 +68,7 @@ jobs:
         run: |
           set -e
           for t in "$CF_DIR"/*.yml; do
-            "$PARAMS" "$t" "$PARAM_FILE" \
+            bash "$PARAMS" "$t" "$PARAM_FILE" \
               DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" \
               LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" \
               ReportS3BucketName=placeholder DashboardApiUrl=placeholder >/dev/null
@@ -116,7 +116,7 @@ jobs:
           ORDER_NOTIFICATION_EMAIL: ${{ secrets.ORDER_NOTIFICATION_EMAIL }}
         run: |
           set -e
-          mapfile -t P < <("$PARAMS" "$CF_DIR/network.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/network.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           aws cloudformation deploy \
             --template-file "$CF_DIR/network.yml" \
             --stack-name "cloudmart-${ENV_NAME}-network-stack" \
@@ -152,7 +152,7 @@ jobs:
           ORDER_NOTIFICATION_EMAIL: ${{ secrets.ORDER_NOTIFICATION_EMAIL }}
         run: |
           set -e
-          mapfile -t P < <("$PARAMS" "$CF_DIR/data.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/data.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           aws cloudformation deploy \
             --template-file "$CF_DIR/data.yml" \
             --stack-name "cloudmart-${ENV_NAME}-data-stack" \
@@ -195,7 +195,7 @@ jobs:
           ORDER_NOTIFICATION_EMAIL: ${{ secrets.ORDER_NOTIFICATION_EMAIL }}
         run: |
           set -e
-          mapfile -t P < <("$PARAMS" "$CF_DIR/iam.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/iam.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           aws cloudformation deploy \
             --template-file "$CF_DIR/iam.yml" \
             --stack-name "cloudmart-${ENV_NAME}-iam-stack" \
@@ -263,7 +263,7 @@ jobs:
           sam build --template-file "$CF_DIR/auth-stack.yml"
           test -f .aws-sam/build/LambdaAuthorizer/lambda_function.py
           test -f .aws-sam/build/InitSchemaLambda/lambda_function.py
-          mapfile -t P < <("$PARAMS" "$CF_DIR/auth-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/auth-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name "cloudmart-${ENV_NAME}-auth-stack" \
@@ -313,7 +313,7 @@ jobs:
           ORDER_NOTIFICATION_EMAIL: ${{ secrets.ORDER_NOTIFICATION_EMAIL }}
         run: |
           set -e
-          mapfile -t P < <("$PARAMS" "$CF_DIR/event-driven-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/event-driven-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           aws cloudformation deploy \
             --template-file "$CF_DIR/event-driven-stack.yml" \
             --stack-name "cloudmart-${ENV_NAME}-event-driven-stack" \
@@ -374,7 +374,7 @@ jobs:
           sam validate --template-file "$CF_DIR/application.yml" --region "$AWS_REGION"
           sam build --template-file "$CF_DIR/application.yml"
           for f in ProductApiFunction CustomerApiFunction OrderApiFunction; do test -f ".aws-sam/build/$f/lambda_function.py"; done
-          mapfile -t P < <("$PARAMS" "$CF_DIR/application.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/application.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name "cloudmart-${ENV_NAME}-application-stack" \
@@ -427,7 +427,7 @@ jobs:
           sam validate --template-file "$CF_DIR/reporting-stack.yml" --region "$AWS_REGION"
           sam build --template-file "$CF_DIR/reporting-stack.yml"
           test -f src/report/lambda_function.py
-          mapfile -t P < <("$PARAMS" "$CF_DIR/reporting-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/reporting-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           sam deploy \
             --template-file .aws-sam/build/template.yaml \
             --stack-name "cloudmart-${ENV_NAME}-reporting-stack" \
@@ -466,7 +466,7 @@ jobs:
           ORDER_NOTIFICATION_EMAIL: ${{ secrets.ORDER_NOTIFICATION_EMAIL }}
         run: |
           set -e
-          mapfile -t P < <("$PARAMS" "$CF_DIR/monitoring-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/monitoring-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET")
           aws cloudformation deploy \
             --template-file "$CF_DIR/monitoring-stack.yml" \
             --stack-name "cloudmart-${ENV_NAME}-monitoring-stack" \
@@ -511,7 +511,7 @@ jobs:
             --stack-name "cloudmart-${ENV_NAME}-application-stack" --region "$AWS_REGION" \
             --query "Stacks[0].Outputs[?OutputKey=='ProductApiUrl'].OutputValue | [0]" --output text)
           if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then echo "API URL not found"; exit 1; fi
-          mapfile -t P < <("$PARAMS" "$CF_DIR/dashboard-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET" DashboardApiUrl="$API_URL")
+          mapfile -t P < <(bash "$PARAMS" "$CF_DIR/dashboard-stack.yml" "$PARAM_FILE" DBPassword="$DB_PASSWORD" AuthToken="$AUTH_TOKEN" LowStockEmail="$LOW_STOCK_EMAIL" OrderNotificationEmail="$ORDER_NOTIFICATION_EMAIL" ReportS3BucketName="$REPORT_BUCKET" DashboardApiUrl="$API_URL")
           aws cloudformation deploy \
             --template-file "$CF_DIR/dashboard-stack.yml" \
             --stack-name "cloudmart-${ENV_NAME}-dashboard-stack" \
