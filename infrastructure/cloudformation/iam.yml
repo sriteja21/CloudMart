@@ -429,6 +429,7 @@ Resources:
                   - ssm:GetParameters
                 Resource:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/s3/report-bucket
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${Environment}/auth/token
         - PolicyName: DashboardEC2ReadAccess
           PolicyDocument:
             Version: '2012-10-17'
