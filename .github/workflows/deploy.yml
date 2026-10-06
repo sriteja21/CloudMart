@@ -274,17 +274,6 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
-      - name: Initialise database schema
-        run: |
-          set -e
-          FN="cloudmart-${ENV_NAME}-initschema"
-          aws lambda invoke --function-name "$FN" --region "$AWS_REGION" \
-            --cli-read-timeout 310 --payload '{}' --cli-binary-format raw-in-base64-out out.json >meta.json
-          cat meta.json out.json
-          if jq -e '.FunctionError' meta.json >/dev/null; then
-            echo "Init-schema Lambda failed"; exit 1
-          fi
-
   events:
     name: Deploy Event-Driven Stack
     runs-on: ubuntu-latest

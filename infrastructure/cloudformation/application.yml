@@ -398,7 +398,7 @@ Resources:
 
         AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
 
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,X-Customer-Id'"
 
         AllowOrigin: "'*'"
 
@@ -421,7 +421,7 @@ Resources:
               Headers:
                 - Authorization
 
-            AuthorizerResultTtlInSeconds: 0
+              ReauthorizeEvery: 0
 
 
 Outputs:
