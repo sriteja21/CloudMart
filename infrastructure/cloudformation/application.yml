@@ -8,10 +8,11 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
     AllowedValues:
       - dev
+      - test
       - prod
+    Description: Deployment environment
 
 
 Resources:
@@ -23,7 +24,7 @@ Resources:
     Properties:
 
       FunctionName:
-        !Sub CloudMart-Product-API-${Environment}
+        !Sub cloudmart-${Environment}-product-api
 
       Runtime: python3.12
 
@@ -37,20 +38,20 @@ Resources:
 
       Role:
         Fn::ImportValue:
-          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+          !Sub cloudmart-${Environment}-lambda-execution-role-arn
 
       VpcConfig:
 
         SecurityGroupIds:
           - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
+              !Sub cloudmart-${Environment}-lambda-sg-id
 
         SubnetIds:
           - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
+              !Sub cloudmart-${Environment}-private-subnet-1-id
 
           - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
+              !Sub cloudmart-${Environment}-private-subnet-2-id
 
       Environment:
 
@@ -131,20 +132,20 @@ Resources:
             Method: DELETE
 
 
-  OrderApiFunction:
+  CustomerApiFunction:
 
     Type: AWS::Serverless::Function
 
     Properties:
 
       FunctionName:
-        !Sub CloudMart-Order-API-${Environment}
+        !Sub cloudmart-${Environment}-customer-api
 
       Runtime: python3.12
 
       Handler: lambda_function.lambda_handler
 
-      CodeUri: ../../src/order/
+      CodeUri: ../../src/customer/
 
       MemorySize: 256
 
@@ -152,20 +153,20 @@ Resources:
 
       Role:
         Fn::ImportValue:
-          !Sub CloudMart-LambdaExecutionRoleArn-${Environment}
+          !Sub cloudmart-${Environment}-lambda-execution-role-arn
 
       VpcConfig:
 
         SecurityGroupIds:
           - Fn::ImportValue:
-              !Sub CloudMart-Lambda-SG-ID
+              !Sub cloudmart-${Environment}-lambda-sg-id
 
         SubnetIds:
           - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-ID
+              !Sub cloudmart-${Environment}-private-subnet-1-id
 
           - Fn::ImportValue:
-              !Sub CloudMart-Private-Subnet-2-ID
+              !Sub cloudmart-${Environment}-private-subnet-2-id
 
       Environment:
 
@@ -248,6 +249,51 @@ Resources:
 
             Method: DELETE
 
+
+  OrderApiFunction:
+
+    Type: AWS::Serverless::Function
+
+    Properties:
+
+      FunctionName:
+        !Sub cloudmart-${Environment}-order-api
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      CodeUri: ../../src/order/
+
+      MemorySize: 256
+
+      Timeout: 30
+
+      Role:
+        Fn::ImportValue:
+          !Sub cloudmart-${Environment}-lambda-execution-role-arn
+
+      VpcConfig:
+
+        SecurityGroupIds:
+          - Fn::ImportValue:
+              !Sub cloudmart-${Environment}-lambda-sg-id
+
+        SubnetIds:
+          - Fn::ImportValue:
+              !Sub cloudmart-${Environment}-private-subnet-1-id
+
+          - Fn::ImportValue:
+              !Sub cloudmart-${Environment}-private-subnet-2-id
+
+      Environment:
+
+        Variables:
+
+          ENVIRONMENT:
+            !Ref Environment
+
+      Events:
 
         CreateOrder:
 
@@ -340,7 +386,7 @@ Resources:
     Properties:
 
       Name:
-        !Sub CloudMart-Product-Customer-Order-API-${Environment}
+        !Sub cloudmart-${Environment}-product-customer-order-api
 
       StageName:
         !Ref Environment
@@ -352,7 +398,7 @@ Resources:
 
         AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
 
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,X-Customer-Id'"
 
         AllowOrigin: "'*'"
 
@@ -366,7 +412,7 @@ Resources:
 
             FunctionArn:
               Fn::ImportValue:
-                !Sub CloudMart-Lambda-Authorizer-Arn-${Environment}
+                !Sub cloudmart-${Environment}-lambda-authorizer-arn
 
             FunctionPayloadType: REQUEST
 
@@ -375,7 +421,7 @@ Resources:
               Headers:
                 - Authorization
 
-            AuthorizerResultTtlInSeconds: 0
+              ReauthorizeEvery: 0
 
 
 Outputs:
@@ -402,7 +448,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-Product-Api-Lambda-Arn-${Environment}
+        !Sub cloudmart-${Environment}-product-api-lambda-arn
 
 
   ProductApiFunctionName:
@@ -414,28 +460,52 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-Product-Api-Lambda-Name-${Environment}
+        !Sub cloudmart-${Environment}-product-api-lambda-name
+
+
+  CustomerApiFunctionArn:
+
+    Description: CloudMart Customer Lambda ARN
+
+    Value:
+      !GetAtt CustomerApiFunction.Arn
+
+    Export:
+      Name:
+        !Sub cloudmart-${Environment}-customer-api-lambda-arn
+
+
+  CustomerApiFunctionName:
+
+    Description: CloudMart Customer Lambda name
+
+    Value:
+      !Ref CustomerApiFunction
+
+    Export:
+      Name:
+        !Sub cloudmart-${Environment}-customer-api-lambda-name
 
 
   OrderApiFunctionArn:
 
-    Description: CloudMart Order and Customer Lambda ARN
+    Description: CloudMart Order Lambda ARN
 
     Value:
       !GetAtt OrderApiFunction.Arn
 
     Export:
       Name:
-        !Sub CloudMart-Order-Api-Lambda-Arn-${Environment}
+        !Sub cloudmart-${Environment}-order-api-lambda-arn
 
 
   OrderApiFunctionName:
 
-    Description: CloudMart Order and Customer Lambda name
+    Description: CloudMart Order Lambda name
 
     Value:
       !Ref OrderApiFunction
 
     Export:
       Name:
-        !Sub CloudMart-Order-Api-Lambda-Name-${Environment}
+        !Sub cloudmart-${Environment}-order-api-lambda-name

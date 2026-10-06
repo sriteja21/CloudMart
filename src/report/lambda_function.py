@@ -135,13 +135,13 @@ def get_database_connection():
 
 
 # ==========================================================
-# FETCH INVENTORY DATA
+# FETCH INVENTORY DATA (LAST 24 HOURS)
 # ==========================================================
 
 def get_inventory_report(connection):
 
     logger.info(
-        "Fetching inventory report data"
+        "Fetching inventory report data (last 24 hours)"
     )
 
     query = """
@@ -162,6 +162,7 @@ def get_inventory_report(connection):
         FROM products p
         LEFT JOIN inventory i
             ON p.product_id = i.product_id
+        WHERE i.last_updated_at >= NOW() - INTERVAL 24 HOUR
         ORDER BY p.product_id
     """
 
@@ -174,7 +175,7 @@ def get_inventory_report(connection):
             rows = cursor.fetchall()
 
         logger.info(
-            "Fetched %d inventory records",
+            "Fetched %d inventory records from last 24 hours",
             len(rows)
         )
 
@@ -190,13 +191,13 @@ def get_inventory_report(connection):
 
 
 # ==========================================================
-# FETCH ORDERS
+# FETCH ORDERS (LAST 24 HOURS)
 # ==========================================================
 
 def get_orders_report(connection):
 
     logger.info(
-        "Fetching orders report data"
+        "Fetching orders report data (last 24 hours)"
     )
 
     query = """
@@ -213,6 +214,7 @@ def get_orders_report(connection):
         FROM orders o
         LEFT JOIN customers c
             ON o.customer_id = c.customer_id
+        WHERE o.created_at >= NOW() - INTERVAL 24 HOUR
         ORDER BY o.created_at DESC
     """
 
@@ -225,7 +227,7 @@ def get_orders_report(connection):
             rows = cursor.fetchall()
 
         logger.info(
-            "Fetched %d order records",
+            "Fetched %d order records from last 24 hours",
             len(rows)
         )
 
@@ -241,13 +243,13 @@ def get_orders_report(connection):
 
 
 # ==========================================================
-# FETCH ORDER ITEMS
+# FETCH ORDER ITEMS (LAST 24 HOURS)
 # ==========================================================
 
 def get_order_items_report(connection):
 
     logger.info(
-        "Fetching order item report data"
+        "Fetching order item report data (last 24 hours)"
     )
 
     query = """
@@ -262,10 +264,11 @@ def get_order_items_report(connection):
             oi.unit_price,
             oi.total_price
         FROM order_items oi
-        LEFT JOIN orders o
+        INNER JOIN orders o
             ON oi.order_id = o.order_id
         LEFT JOIN products p
             ON oi.product_id = p.product_id
+        WHERE o.created_at >= NOW() - INTERVAL 24 HOUR
         ORDER BY oi.order_id DESC
     """
 
@@ -278,7 +281,7 @@ def get_order_items_report(connection):
             rows = cursor.fetchall()
 
         logger.info(
-            "Fetched %d order item records",
+            "Fetched %d order item records from last 24 hours",
             len(rows)
         )
 
@@ -294,13 +297,13 @@ def get_order_items_report(connection):
 
 
 # ==========================================================
-# FETCH ORDER LOGS
+# FETCH ORDER LOGS (LAST 24 HOURS)
 # ==========================================================
 
 def get_order_logs_report(connection):
 
     logger.info(
-        "Fetching order log report data"
+        "Fetching order log report data (last 24 hours)"
     )
 
     query = """
@@ -316,6 +319,7 @@ def get_order_logs_report(connection):
         FROM order_logs ol
         LEFT JOIN orders o
             ON ol.order_id = o.order_id
+        WHERE ol.created_at >= NOW() - INTERVAL 24 HOUR
         ORDER BY ol.created_at DESC
     """
 
@@ -328,7 +332,7 @@ def get_order_logs_report(connection):
             rows = cursor.fetchall()
 
         logger.info(
-            "Fetched %d order log records",
+            "Fetched %d order log records from last 24 hours",
             len(rows)
         )
 
@@ -393,6 +397,9 @@ def generate_summary(
 
         "environment":
             ENVIRONMENT,
+
+        "time_window":
+            "Last 24 Hours",
 
         "total_products":
             total_products,
@@ -480,7 +487,7 @@ def generate_csv(
     # ------------------------------------------------------
 
     writer.writerow([
-        "CloudMart Daily Operational Report"
+        "CloudMart Daily Operational Report (Last 24 Hours)"
     ])
 
     writer.writerow([

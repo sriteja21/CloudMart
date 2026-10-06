@@ -20,24 +20,13 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
 
     AllowedValues:
       - dev
+      - test
       - prod
 
     Description: Deployment environment
-
-
-  # --------------------------------------------------------
-  # REPORT S3 BUCKET
-  # --------------------------------------------------------
-
-  ReportS3BucketName:
-    Type: String
-    Default: cloudmart-dev-reports-test
-
-    Description: S3 bucket used to store CloudMart reports
 
 
 # ==========================================================
@@ -60,7 +49,7 @@ Resources:
     Properties:
 
       BucketName:
-        !Ref ReportS3BucketName
+        !Sub cloudmart-${Environment}-reports-${AWS::AccountId}
 
 
       # ----------------------------------------------------
@@ -126,7 +115,7 @@ Resources:
     Properties:
 
       FunctionName:
-        !Sub CloudMart-Report-Lambda-${Environment}
+        !Sub cloudmart-${Environment}-report-lambda
 
 
       # ----------------------------------------------------
@@ -179,7 +168,7 @@ Resources:
       Role:
 
         Fn::ImportValue:
-          !Sub CloudMart-ReportLambdaExecutionRoleArn-${Environment}
+          !Sub cloudmart-${Environment}-report-lambda-role-arn
 
 
       # ----------------------------------------------------
@@ -193,6 +182,9 @@ Resources:
           ENVIRONMENT:
             !Ref Environment
 
+          REPORT_BUCKET:
+            !Ref ReportBucket
+
 
       # ----------------------------------------------------
       # VPC CONFIGURATION
@@ -203,15 +195,15 @@ Resources:
         SecurityGroupIds:
 
           - Fn::ImportValue:
-              CloudMart-Lambda-SG-ID
+              !Sub cloudmart-${Environment}-lambda-sg-id
 
         SubnetIds:
 
           - Fn::ImportValue:
-              CloudMart-Private-Subnet-ID
+              !Sub cloudmart-${Environment}-private-subnet-1-id
 
           - Fn::ImportValue:
-              CloudMart-Private-Subnet-2-ID
+              !Sub cloudmart-${Environment}-private-subnet-2-id
 
 
       # ----------------------------------------------------
@@ -237,7 +229,7 @@ Resources:
     Properties:
 
       RoleName:
-        !Sub CloudMart-Report-Scheduler-Role-${Environment}
+        !Sub cloudmart-${Environment}-report-scheduler-role
 
 
       # ----------------------------------------------------
@@ -296,7 +288,7 @@ Resources:
     Properties:
 
       Name:
-        !Sub CloudMart-Daily-Report-${Environment}
+        !Sub cloudmart-${Environment}-daily-report-schedule
 
 
       # ----------------------------------------------------
@@ -380,7 +372,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-ReportBucketName-${Environment}
+        !Sub cloudmart-${Environment}-report-bucket-name
 
 
   # ========================================================
@@ -397,7 +389,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-ReportBucketArn-${Environment}
+        !Sub cloudmart-${Environment}-report-bucket-arn
 
 
   # ========================================================
@@ -414,7 +406,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-ReportLambdaArn-${Environment}
+        !Sub cloudmart-${Environment}-report-lambda-arn
 
 
   # ========================================================
@@ -431,7 +423,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-ReportLambdaName-${Environment}
+        !Sub cloudmart-${Environment}-report-lambda-name
 
 
   # ========================================================
@@ -448,7 +440,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-DailyReportScheduleArn-${Environment}
+        !Sub cloudmart-${Environment}-daily-report-schedule-arn
 
 
   # ========================================================
@@ -465,7 +457,7 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-DailyReportScheduleName-${Environment}
+        !Sub cloudmart-${Environment}-daily-report-schedule-name
 
 
   # ========================================================
@@ -482,5 +474,4 @@ Outputs:
 
     Export:
       Name:
-        !Sub CloudMart-ReportSchedulerRoleArn-${Environment}
-
+        !Sub cloudmart-${Environment}-report-scheduler-role-arn

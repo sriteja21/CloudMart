@@ -10,10 +10,19 @@
     <aside class="sidebar">
         <div class="brand">☁ CloudMart</div>
         <div class="env">Environment: {{ config.get("ENVIRONMENT", "dev") }}</div>
+
+        {% if session.get("authenticated") and session.get("role") == "ADMIN" %}
+        <div class="admin-user">
+            <span>Signed in as</span>
+            <strong>{{ session.get("name", "Admin") }}</strong>
+        </div>
+
         <nav>
             <a href="{{ url_for('index') }}">Overview</a>
             <a href="{{ url_for('reports') }}">Reports</a>
+            <a href="{{ url_for('logout') }}" class="logout-link">Logout</a>
         </nav>
+        {% endif %}
     </aside>
 
     <main class="main">

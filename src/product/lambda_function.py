@@ -15,7 +15,6 @@ cloudwatch = boto3.client("cloudwatch")
 
 ENV = os.getenv("ENVIRONMENT", "dev")
 EVENT_BUS = f"cloudmart-{ENV}-event-bus"
-SCHEMA = os.path.join(os.path.dirname(__file__), "schema.sql")
 
 PARAMS = {
     "host": f"/app/{ENV}/database/host",
@@ -93,53 +92,6 @@ def connect_db(c):
     return connection
 
 
-def initialize_database(c):
-    logger.info("Database initialization started")
-    server = connect_server(c)
-
-    try:
-        with server.cursor() as cur:
-            db_name = c["database"].replace("`", "``")
-            logger.info("Checking database exists: %s", c["database"])
-            cur.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}`")
-            logger.info("Database exists or was created successfully")
-    finally:
-        server.close()
-        logger.info("MySQL server connection closed")
-
-    conn = connect_db(c)
-
-    logger.info("Reading schema file: %s", SCHEMA)
-    with open(SCHEMA, "r", encoding="utf-8") as f:
-        sql = f.read()
-
-    try:
-        with conn.cursor() as cur:
-            statements = sql.split(";")
-            logger.info("Schema contains %s SQL statements", len(statements))
-
-            executed = 0
-            for statement in statements:
-                statement = statement.strip()
-
-                if statement and not statement.startswith("--"):
-                    cur.execute(statement)
-                    executed += 1
-
-            logger.info("Schema execution completed: statements=%s", executed)
-
-        conn.commit()
-        logger.info("Database transaction committed: database initialization")
-        logger.info("Database and tables are ready")
-        return conn
-
-    except Exception:
-        conn.rollback()
-        logger.exception("Database initialization failed; transaction rolled back")
-        conn.close()
-        raise
-
-
 def db():
     global _connection
 
@@ -160,7 +112,7 @@ def db():
 
     logger.info("Creating new database connection")
     c = config()
-    _connection = initialize_database(c)
+    _connection = connect_db(c)
     logger.info("New database connection ready")
     return _connection
 

@@ -1,0 +1,12 @@
+[
+  { "ParameterKey": "Environment",        "ParameterValue": "dev" },
+  { "ParameterKey": "VpcCidr",            "ParameterValue": "10.0.0.0/16" },
+  { "ParameterKey": "PublicSubnetCidr",   "ParameterValue": "10.0.1.0/24" },
+  { "ParameterKey": "PrivateSubnetCidr",  "ParameterValue": "10.0.3.0/24" },
+  { "ParameterKey": "PrivateSubnet2Cidr", "ParameterValue": "10.0.4.0/24" },
+  { "ParameterKey": "AdminIp",            "ParameterValue": "127.0.0.1/32" },
+  { "ParameterKey": "DBName",             "ParameterValue": "cloudmart" },
+  { "ParameterKey": "DBUsername",         "ParameterValue": "admin" },
+  { "ParameterKey": "DBInstanceClass",    "ParameterValue": "db.t3.micro" },
+  { "ParameterKey": "DBAllocatedStorage", "ParameterValue": "20" }
+]
