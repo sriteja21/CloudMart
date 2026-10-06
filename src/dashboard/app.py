@@ -44,6 +44,34 @@ def get_auth_token():
     return response["Parameter"]["Value"]
 
 
+def auth_headers(token, customer_id):
+    """
+    Headers every CloudMart API call must carry.
+
+    The Lambda authorizer needs the bearer token AND the caller's customer id.
+    A REQUEST authorizer never sees the JSON body, so the id is sent in the
+    X-Customer-Id header (and also as ?customer_id=, see api_get/api_post).
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    if customer_id is not None:
+        headers["X-Customer-Id"] = str(customer_id)
+    return headers
+
+
+def raise_for_status_logged(response, method, path):
+    """Like raise_for_status(), but logs the status and body so a 401/403/500
+    from the authorizer or a backend Lambda is visible in the dashboard log."""
+    if response.status_code >= 400:
+        logger.error(
+            "API %s %s failed: status=%s body=%s",
+            method,
+            path,
+            response.status_code,
+            response.text[:300],
+        )
+    response.raise_for_status()
+
+
 def api_get(path, customer_id=ADMIN_CUSTOMER_ID, params=None):
     """Call a CloudMart API endpoint from the EC2 backend with customer_id query parameter."""
     if not API_URL:
@@ -56,18 +84,19 @@ def api_get(path, customer_id=ADMIN_CUSTOMER_ID, params=None):
     url = f"{API_URL}/{path.lstrip('/')}"
     logger.info("Dashboard API GET %s", path)
 
-    # Prepare query parameters including customer_id required by authorizer
-    request_params = params or {}
+    # Copy so the caller's dict is never modified, then add the customer_id
+    # the authorizer needs (query string AND X-Customer-Id header).
+    request_params = dict(params or {})
     if customer_id is not None and "customer_id" not in request_params:
         request_params["customer_id"] = customer_id
 
     response = requests.get(
         url,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=auth_headers(token, request_params.get("customer_id")),
         params=request_params,
         timeout=15,
     )
-    response.raise_for_status()
+    raise_for_status_logged(response, "GET", path)
     return response.json()
 
 
@@ -83,7 +112,9 @@ def api_post(path, payload=None, customer_id=ADMIN_CUSTOMER_ID):
     url = f"{API_URL}/{path.lstrip('/')}"
     payload = payload or {}
 
-    # Attach customer_id to query parameters and payload body for authorizer compliance
+    # The authorizer cannot read the body: send the id in the query string and
+    # the X-Customer-Id header. It is also kept in the body for the backend Lambda.
+    payload = dict(payload)
     params = {}
     if customer_id is not None:
         params["customer_id"] = customer_id
@@ -95,11 +126,11 @@ def api_post(path, payload=None, customer_id=ADMIN_CUSTOMER_ID):
     response = requests.post(
         url,
         json=payload,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=auth_headers(token, customer_id),
         params=params,
         timeout=15,
     )
-    response.raise_for_status()
+    raise_for_status_logged(response, "POST", path)
     return response.json()
 
 
@@ -117,16 +148,19 @@ def dashboard_data():
     # If an endpoint is unavailable, the dashboard still loads.
     customers = []
     orders = []
+    warnings = []
 
     try:
         customers = api_get("/customer", customer_id=ADMIN_CUSTOMER_ID).get("customers", [])
     except Exception as exc:
         logger.warning("Customer API unavailable: %s", exc)
+        warnings.append(f"Customers could not be loaded: {exc}")
 
     try:
         orders = api_get("/order", customer_id=ADMIN_CUSTOMER_ID).get("orders", [])
     except Exception as exc:
         logger.warning("Order API unavailable: %s", exc)
+        warnings.append(f"Orders could not be loaded: {exc}")
 
     total_inventory = sum(
         int(p.get("quantity_available", 0) or 0)
@@ -165,6 +199,7 @@ def dashboard_data():
         "total_revenue": float(total_revenue),
         "top_products": product_values[:5],
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "warnings": warnings,
     }
 
 

@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import logging
+import re
 import time
 
 import boto3
@@ -121,74 +122,37 @@ def hash_token(token):
 def extract_customer_id_from_event(event):
     """
     Extract customer_id from:
-    1. Query string
-    2. JSON request body
+    1. Query string        ?customer_id=7
+    2. X-Customer-Id header
+
+    NOTE: a REQUEST authorizer never receives the request body, so the
+    caller must send the id in the query string or the header. The backend
+    Lambda must still check that any customer_id inside the JSON body
+    matches the authorizer context (requestContext.authorizer.customer_id).
     """
 
     logger.info("Attempting to extract customer_id")
 
-    # --------------------------------------------------------
-    # 1. Query parameters
-    # --------------------------------------------------------
-
     query_params = event.get("queryStringParameters") or {}
 
-    logger.info(
-        "Query parameters received. customer_id_present=%s",
-        "customer_id" in query_params
-    )
+    headers = {
+        str(k).lower(): v
+        for k, v in (event.get("headers") or {}).items()
+    }
 
-    customer_id = query_params.get("customer_id")
+    raw = query_params.get("customer_id") or headers.get("x-customer-id")
 
-    if customer_id and str(customer_id).isdigit():
+    if raw and str(raw).isdigit():
 
-        customer_id = int(customer_id)
+        customer_id = int(raw)
 
         logger.info(
-            "customer_id extracted from query parameters. customer_id=%s",
+            "customer_id extracted. source=%s customer_id=%s",
+            "query" if query_params.get("customer_id") else "header",
             customer_id
         )
 
         return customer_id
-
-    # --------------------------------------------------------
-    # 2. JSON request body
-    # --------------------------------------------------------
-
-    body = event.get("body")
-
-    if body:
-
-        logger.info("Request body is present; checking for customer_id")
-
-        try:
-
-            if isinstance(body, str):
-                body = json.loads(body)
-
-            if isinstance(body, dict):
-
-                customer_id = body.get("customer_id")
-
-                if customer_id and str(customer_id).isdigit():
-
-                    customer_id = int(customer_id)
-
-                    logger.info(
-                        "customer_id extracted from request body. customer_id=%s",
-                        customer_id
-                    )
-
-                    return customer_id
-
-                logger.info(
-                    "Request body exists but contains no valid customer_id"
-                )
-
-        except Exception:
-            logger.exception(
-                "Failed to parse request body while extracting customer_id"
-            )
 
     logger.warning(
         "Unable to extract a valid customer_id from request"
@@ -581,26 +545,9 @@ def generate_policy(
     if role:
         context["role"] = role
 
-    if method_arn == "*":
-
-        resource = "*"
-
-    else:
-
-        arn_parts = method_arn.split("/")
-
-        if len(arn_parts) >= 2:
-
-            resource = (
-                arn_parts[0]
-                + "/"
-                + arn_parts[1]
-                + "/*/*"
-            )
-
-        else:
-
-            resource = method_arn
+    # Scope the policy to exactly the method/path being invoked, so a
+    # cached or reused result can never allow other routes.
+    resource = method_arn
 
     response = {
 
@@ -779,6 +726,29 @@ def lambda_handler(event, context):
             customer_id,
             role
         )
+
+        # ----------------------------------------------------
+        # Non-admins may only read their own order list
+        # ----------------------------------------------------
+
+        own_orders = re.match(r"^/order/customer/(\d+)/?$", path)
+
+        if role != "ADMIN" and own_orders and int(own_orders.group(1)) != int(customer_id):
+
+            logger.warning(
+                "AUTHORIZATION RESULT: DENY - customer_id=%s requested "
+                "orders of customer %s",
+                customer_id,
+                own_orders.group(1)
+            )
+
+            return generate_policy(
+                customer_id,
+                "Deny",
+                event,
+                customer_id,
+                role
+            )
 
         # ----------------------------------------------------
         # Role-based authorization

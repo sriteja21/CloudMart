@@ -331,6 +331,35 @@ Resources:
 
               chmod 600 /etc/cloudmart-dashboard.env
 
+              # ==================================================
+              # DEFAULT AWS REGION FOR EVERY SHELL AND PROCESS
+              # (the systemd service already gets it from the env
+              #  file; this covers SSH / Instance Connect sessions,
+              #  manual runs and any other boto3 / AWS CLI call)
+              # ==================================================
+
+              echo "Setting default AWS region..."
+
+              if ! grep -q '^AWS_REGION=' /etc/environment
+              then
+                cat >> /etc/environment <<REGIONEOF
+              AWS_REGION=${AWS::Region}
+              AWS_DEFAULT_REGION=${AWS::Region}
+              REGIONEOF
+              fi
+
+              mkdir -p /home/ubuntu/.aws
+
+              cat > /home/ubuntu/.aws/config <<AWSCFGEOF
+              [default]
+              region = ${AWS::Region}
+              AWSCFGEOF
+
+              chown -R ubuntu:ubuntu /home/ubuntu/.aws
+
+              chmod 600 /home/ubuntu/.aws/config
+
+
 
               # ==================================================
               # CREATE DASHBOARD LOG FILES
