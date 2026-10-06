@@ -216,7 +216,7 @@ Resources:
               echo "Cloning CloudMart repository..."
 
               git clone \
-                --branch changes \
+                --branch main \
                 --single-branch \
                 https://github.com/sriteja21/CloudMart.git \
                 CloudMart
