@@ -7,7 +7,7 @@
         <h1>Operations Dashboard</h1>
         <p class="muted">Live view of CloudMart operations</p>
     </div>
-    <button class="refresh" onclick="window.location.reload()">Refresh</button>
+    <div style="display:flex; gap:10px; align-items:center;"><button class="refresh" onclick="window.location.reload()">Refresh</button><a class="refresh" href="{{ url_for('logout') }}">Logout</a></div>
 </header>
 
 {% if data.error %}

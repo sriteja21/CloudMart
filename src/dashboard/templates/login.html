@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>CloudMart Admin Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-card {
+            width: min(420px, 100%);
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.10);
+        }
+
+        .login-brand {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            margin: 0 0 24px;
+            color: #667085;
+        }
+
+        .login-form label {
+            display: block;
+            margin: 16px 0 6px;
+            font-weight: 600;
+        }
+
+        .login-form input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 14px;
+            border: 1px solid #d0d5dd;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        .login-form input:focus {
+            outline: none;
+            border-color: #667085;
+        }
+
+        .login-button {
+            width: 100%;
+            margin-top: 24px;
+            padding: 12px 16px;
+            border: 0;
+            border-radius: 8px;
+            background: #111827;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .login-button:hover {
+            opacity: 0.92;
+        }
+
+        .login-error {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #fef2f2;
+            color: #b42318;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <section class="login-card">
+            <div class="login-brand">☁ CloudMart</div>
+            <p class="login-subtitle">Admin Operations Dashboard</p>
+
+            {% if error %}
+            <div class="login-error">{{ error }}</div>
+            {% endif %}
+
+            <form class="login-form" method="post" action="{{ url_for('login') }}">
+                <input
+                    type="hidden"
+                    name="next"
+                    value="{{ next or '' }}"
+                >
+
+                <label for="email">Admin Email</label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autocomplete="username"
+                    placeholder="admin@cloudmart.com"
+                    required
+                    autofocus
+                >
+
+                <label for="password">Admin Token</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    placeholder="Enter admin token"
+                    required
+                >
+
+                <button class="login-button" type="submit">
+                    Login
+                </button>
+            </form>
+        </section>
+    </div>
+</body>
+</html>
