@@ -212,17 +212,4 @@ ENVIRONMENT=dev API_URL=https://<api-url> REPORT_BUCKET=<bucket> python app.py  
 
 ---
 
-## Known issues to fix before production
 
-These were found while reviewing the templates and code together.
-
-1. **Dashboard token mismatch.** The dashboard sends the SSM token (`test-token-12345` by default) as customer `1`, but the authorizer compares against the DB hash of `admin@123`. Set the `AuthToken` parameter in `iam.yml` to the admin token (or change the admin token), otherwise dashboard API calls are denied.
-2. **Dashboard IAM lacks the auth token.** `DashboardEC2Role` can read only `/s3/report-bucket` from SSM; add `/app/<env>/auth/token`.
-3. **Dashboard deploy parameters.** `deploy.yml` passes `InstanceType`, `AmiId` and `KeyName`, but `dashboard-stack.yml` declares only `Environment`, `ReportS3BucketName` and `DashboardApiUrl`. Either add those parameters or remove them from the workflow.
-4. **Monitoring DB identifier.** Alarms default to `cloudmart-db-dev`, but `data.yml` does not set `DBInstanceIdentifier`, so RDS generates a name. Set an explicit identifier or pass the `DatabaseIdentifier` export to the monitoring stack.
-5. **Customer Lambda has no log permissions.** The shared execution role grants log access only to the Product and Order log groups. Add `CloudMart-Customer-API-<env>`.
-6. **Notification templates.** The order rule reads `$.detail.customer_id`, but the Lambda sends `customer.customer_id`; the low stock rule reads `product_name`, which the Product Lambda does not send. These fields render empty. Order status `PROCESSING` also publishes `Order Processing`, which no rule matches.
-7. **Role permissions.** `PRODUCT_OWNER` is allowed in the Order Lambda to `PUT /order/{id}`, but the authorizer does not grant that route, so only `ADMIN` can advance order status.
-8. **Schema initialisation is manual.** The pipeline never invokes `CloudMart-InitSchema-<env>`.
-9. **Security hardening.** `AdminIp` defaults to `0.0.0.0/0` (SSH open to the world), CORS allows `*`, the DB password is stored as a plain `String` SSM parameter (use `SecureString`), and RDS has backups disabled with deletion protection off. Acceptable for dev, not for prod.
-10. **Reporting window.** The inventory section of the report only includes rows updated in the last 24 hours, so unchanged products are omitted.
