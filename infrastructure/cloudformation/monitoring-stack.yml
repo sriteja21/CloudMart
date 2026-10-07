@@ -14,6 +14,9 @@ Parameters:
       - test
       - prod
     Description: CloudMart deployment environment
+  LowStockEmail:
+    Type: String
+    Description: Email address for low stock notifications
 
 Resources:
 
@@ -33,7 +36,12 @@ Resources:
           Value: !Ref Environment
         - Key: Component
           Value: Monitoring
-
+  MonitoringAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref MonitoringAlarmTopic
+      Protocol: email
+      Endpoint: !Ref LowStockEmail
   # ==========================================================
   # CLOUDWATCH OPERATIONS DASHBOARD
   # ==========================================================
